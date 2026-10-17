@@ -4,7 +4,7 @@ import { type FormEvent, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { parseTransactionAmounts } from "../domain/transaction-input";
-import { labelError } from "../domain/validation";
+import { categoryNameError, labelError } from "../domain/validation";
 import { amount, ConfirmModal, Modal, MoneyInput, usd } from "./ui";
 import { ValidatedInput } from "./ValidatedInput";
 import type { ViewProps } from "./view-types";
@@ -574,7 +574,9 @@ function CategoryEditor({
 					<ValidatedInput
 						id="transactionsview-name"
 						aria-label="Name"
-						validate={labelError}
+						validate={(value) =>
+							categoryNameError(value, categories, current?._id)
+						}
 						name="name"
 						defaultValue={current?.name ?? ""}
 						required

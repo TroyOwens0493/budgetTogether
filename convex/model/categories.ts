@@ -1,5 +1,6 @@
 import { ConvexError } from "convex/values";
 import { assertRevision } from "../../src/domain/budget";
+import { categoryNameError } from "../../src/domain/validation";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { access, label, readCutoff } from "../access";
@@ -37,12 +38,8 @@ export async function save(
 		.query("categories")
 		.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
 		.collect();
-	if (
-		all.some(
-			(x) => x._id !== args.id && x.name.toLowerCase() === name.toLowerCase(),
-		)
-	)
-		throw new ConvexError("A category with this name already exists.");
+	const error = categoryNameError(name, all, args.id);
+	if (error) throw new ConvexError(error);
 	if (args.id) {
 		const existing = await ctx.db.get(args.id);
 		if (!existing || existing.spaceId !== args.spaceId)

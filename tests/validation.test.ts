@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	amountError,
+	categoryNameError,
 	labelError,
 	timeZoneError,
 } from "../src/domain/validation";
@@ -24,4 +25,12 @@ test("labels must contain non-space characters and time zones must exist", () =>
 	assert.equal(timeZoneError("UTC"), "");
 	assert.notEqual(timeZoneError("Boise"), "");
 	assert.notEqual(timeZoneError(""), "");
+});
+
+test("category names use trimmed, case-insensitive uniqueness and allow the current name", () => {
+	const categories = [{ _id: "groceries", name: "Groceries" }];
+	assert.notEqual(categoryNameError(" groceries ", categories), "");
+	assert.equal(categoryNameError(" groceries ", categories, "groceries"), "");
+	assert.equal(categoryNameError("Transport", categories), "");
+	assert.notEqual(categoryNameError(" ", categories), "");
 });

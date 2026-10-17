@@ -25,3 +25,20 @@ export function amountError(value: string, allowNegative = false): string {
 			: "Enter zero or a positive amount with at most two decimal places.";
 	}
 }
+
+export function categoryNameError(
+	value: string,
+	categories: { _id: string; name: string }[],
+	currentId?: string,
+): string {
+	return (
+		labelError(value) ||
+		(categories.some(
+			(category) =>
+				category._id !== currentId &&
+				category.name.toLowerCase() === value.trim().toLowerCase(),
+		)
+			? "A category with this name already exists."
+			: "")
+	);
+}
