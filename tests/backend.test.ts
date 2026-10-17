@@ -817,7 +817,7 @@ test("category deletion reassigns transactions and preserves the sum of plan lim
 	assert.equal(result.entries[0].splits[0].categoryId, replacementId);
 	assert.equal(result.spending, 1000);
 });
-test("manual entry CRUD checks split totals and refuses deletion of imported entries", async () => {
+test("manual entries are saved as posted, check split totals, and refuse deletion of imports", async () => {
 	const { db, privateId, categoryId, accountId } = await fixture();
 	const value = {
 		spaceId: privateId,
@@ -831,10 +831,11 @@ test("manual entry CRUD checks split totals and refuses deletion of imported ent
 		splits: [{ categoryId, amount: 1000 }],
 		revision: 0,
 	};
-	await invoke(budgets.saveTransaction, db, value);
+	await invoke(budgets.saveTransaction, db, { ...value, pending: true });
 	const transaction = id<"transactions">(
 		[...db.rows.values()].find((x) => x._id.startsWith("transactions:"))!._id,
 	);
+	assert.equal((await db.get(transaction))!.pending, false);
 	await assert.rejects(
 		() =>
 			invoke(budgets.saveTransaction, db, {
@@ -845,13 +846,16 @@ test("manual entry CRUD checks split totals and refuses deletion of imported ent
 			}),
 		/total/,
 	);
+	await db.patch(transaction, { pending: true });
 	await invoke(budgets.saveTransaction, db, {
 		...value,
 		id: transaction,
 		revision: 1,
 		note: "Changed",
+		pending: true,
 	});
 	assert.equal((await db.get(transaction))!.note, "Changed");
+	assert.equal((await db.get(transaction))!.pending, false);
 	await invoke(budgets.deleteTransaction, db, { id: transaction, revision: 2 });
 	assert.equal(await db.get(transaction), null);
 	const imported = await entry(
@@ -866,6 +870,22 @@ test("manual entry CRUD checks split totals and refuses deletion of imported ent
 	await assert.rejects(
 		() => invoke(budgets.deleteTransaction, db, { id: imported, revision: 0 }),
 		/Only manual/,
+	);
+	await db.patch(imported, { pending: true });
+	await invoke(budgets.saveTransaction, db, {
+		...value,
+		id: imported,
+		pending: true,
+	});
+	assert.equal((await db.get(imported))!.pending, true);
+	await assert.rejects(
+		() =>
+			invoke(budgets.saveTransaction, db, {
+				...value,
+				id: imported,
+				revision: 1,
+			}),
+		/pending status are set by the bank/,
 	);
 });
 

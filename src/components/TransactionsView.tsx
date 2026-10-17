@@ -260,10 +260,7 @@ function TransactionEditor({
 					amount,
 					date: String(form.get("date")),
 					kind,
-					pending:
-						entry?.source === "plaid"
-							? entry.pending
-							: form.get("pending") === "on",
+					pending: entry?.source === "plaid" ? entry.pending : false,
 					note: String(form.get("note")),
 					splits: allocations.map((split) => ({
 						...split,
@@ -431,16 +428,6 @@ function TransactionEditor({
 						Note
 						<textarea name="note" maxLength={2000} defaultValue={entry?.note} />
 					</label>
-					{entry?.source !== "plaid" && (
-						<label className="checkbox">
-							<input
-								name="pending"
-								type="checkbox"
-								defaultChecked={entry?.pending}
-							/>
-							Pending
-						</label>
-					)}
 					{transactionAmount && amounts.error && (
 						<p className="over" role="alert">
 							{amounts.error}

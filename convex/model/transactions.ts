@@ -84,6 +84,7 @@ export async function save(
 	)
 		throw new ConvexError("Choose an account in this budget.");
 	if (args.id && !old) throw new ConvexError("Transaction not found.");
+	const pending = old?.source === "plaid" && args.pending;
 	assertRevision(old?.revision ?? 0, args.revision);
 	money(args.amount);
 	if (
@@ -118,7 +119,7 @@ export async function save(
 		(args.kind !== "transfer" ||
 			old?.amount !== args.amount ||
 			old?.date !== args.date ||
-			old?.pending !== args.pending)
+			old?.pending !== pending)
 	)
 		throw new ConvexError(
 			"Remove the contribution match before changing its classification.",
@@ -130,7 +131,7 @@ export async function save(
 		amount: args.amount,
 		date: args.date,
 		kind: args.kind,
-		pending: args.pending,
+		pending,
 		note: args.note,
 		splits: args.splits,
 		revision: (old?.revision ?? 0) + 1,
