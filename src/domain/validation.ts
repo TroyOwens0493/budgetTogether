@@ -6,6 +6,15 @@ export function labelError(value: string, maximum = 100): string {
 		: "";
 }
 
+export function timeZoneError(value: string): string {
+	try {
+		new Intl.DateTimeFormat("en", { timeZone: value });
+		return "";
+	} catch {
+		return "Choose a valid time zone, such as America/Boise.";
+	}
+}
+
 export function amountError(value: string, allowNegative = false): string {
 	try {
 		money(cents(value), !allowNegative);

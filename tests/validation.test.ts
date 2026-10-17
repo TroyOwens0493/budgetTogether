@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { amountError, labelError } from "../src/domain/validation";
+import {
+	amountError,
+	labelError,
+	timeZoneError,
+} from "../src/domain/validation";
 
 test("budget and funding amounts reject negatives, invalid precision and unsafe cents", () => {
 	for (const value of ["-1", "1.001", "abc", "", "90071992547409.92"])
@@ -11,7 +15,13 @@ test("budget and funding amounts reject negatives, invalid precision and unsafe 
 	assert.notEqual(amountError("-10.501", true), "");
 });
 
-test("labels reject names made only of spaces", () => {
+test("labels must contain non-space characters and time zones must exist", () => {
 	assert.notEqual(labelError("   "), "");
+	assert.notEqual(labelError("a".repeat(101)), "");
 	assert.equal(labelError(" Alice "), "");
+	assert.equal(labelError("a".repeat(200), 200), "");
+	assert.equal(timeZoneError("America/Boise"), "");
+	assert.equal(timeZoneError("UTC"), "");
+	assert.notEqual(timeZoneError("Boise"), "");
+	assert.notEqual(timeZoneError(""), "");
 });

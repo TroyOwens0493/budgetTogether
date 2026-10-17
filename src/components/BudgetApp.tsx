@@ -16,7 +16,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { cents, nextMonth } from "../domain/budget";
-import { amountError, labelError } from "../domain/validation";
+import { amountError, labelError, timeZoneError } from "../domain/validation";
 import { authClient } from "../lib/auth-client";
 import { AccountsView } from "./AccountsView";
 import { ErrorBanner } from "./ErrorBanner";
@@ -961,9 +961,12 @@ function Profile({ home, run }: { home: Home; run: Run }) {
 					Email
 					<input value={home.user.email} readOnly type="email" />
 				</label>
-				<label>
+				<label htmlFor="budgetapp-timeZone">
 					Time zone
-					<input
+					<ValidatedInput
+						id="budgetapp-timeZone"
+						aria-label="Time zone"
+						validate={timeZoneError}
 						name="timeZone"
 						defaultValue={home.profile!.timeZone}
 						required

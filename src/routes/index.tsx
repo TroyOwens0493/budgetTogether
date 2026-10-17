@@ -5,7 +5,7 @@ import { api } from "../../convex/_generated/api";
 import { Auth } from "../components/Auth";
 import { BudgetApp } from "../components/BudgetApp";
 import { ValidatedInput } from "../components/ValidatedInput";
-import { labelError } from "../domain/validation";
+import { labelError, timeZoneError } from "../domain/validation";
 export const Route = createFileRoute("/")({ component: Home });
 function Home() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
@@ -65,9 +65,12 @@ function Account() {
 							maxLength={100}
 						/>
 					</label>
-					<label>
+					<label htmlFor="setup-timeZone">
 						Reporting time zone
-						<input
+						<ValidatedInput
+							validate={timeZoneError}
+							id="setup-timeZone"
+							aria-label="Reporting time zone"
 							name="timeZone"
 							defaultValue={Intl.DateTimeFormat().resolvedOptions().timeZone}
 							required
