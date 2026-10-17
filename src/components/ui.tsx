@@ -10,12 +10,14 @@ export function MoneyInput({
 	label,
 	required = true,
 	readOnly = false,
+	onChange,
 }: {
 	name: string;
 	value?: number;
 	label: string;
 	required?: boolean;
 	readOnly?: boolean;
+	onChange?: (value: string) => void;
 }) {
 	return (
 		<label>
@@ -27,6 +29,7 @@ export function MoneyInput({
 					defaultValue={value === undefined ? "" : amount(value)}
 					inputMode="decimal"
 					readOnly={readOnly}
+					onChange={(e) => onChange?.(e.target.value)}
 					required={required}
 					pattern="-?[0-9]+(\.[0-9]{1,2})?"
 				/>

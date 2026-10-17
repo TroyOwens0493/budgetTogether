@@ -3,7 +3,7 @@ import { Plus, Search } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
-import { cents } from "../domain/budget";
+import { parseTransactionAmounts } from "../domain/transaction-input";
 import { amount, ConfirmModal, Modal, MoneyInput, usd } from "./ui";
 import type { ViewProps } from "./view-types";
 export function TransactionsView({
@@ -215,6 +215,9 @@ function TransactionEditor({
 	const remove = useMutation(api.budgets.deleteTransaction);
 	const reconcile = useMutation(api.budgets.reconcile);
 	const [kind, setKind] = useState(entry?.kind ?? "purchase");
+	const [transactionAmount, setTransactionAmount] = useState(
+		entry ? amount(entry.amount) : "",
+	);
 	const [splits, setSplits] = useState(
 		entry?.splits.map((x) => ({
 			key: crypto.randomUUID(),
@@ -230,6 +233,7 @@ function TransactionEditor({
 	);
 	const [match, setMatch] = useState("");
 	const [deleting, setDeleting] = useState(false);
+	const amounts = parseTransactionAmounts(kind, transactionAmount, splits);
 	const imports = useQuery(
 		api.budgets.transactions,
 		entry?.source === "manual"
@@ -243,6 +247,8 @@ function TransactionEditor({
 	);
 	async function submit(e: FormEvent<HTMLFormElement>) {
 		e.preventDefault();
+		if (!amounts.data) return;
+		const { amount, splits: allocations } = amounts.data;
 		const form = new FormData(e.currentTarget);
 		if (
 			await run(() =>
@@ -251,7 +257,7 @@ function TransactionEditor({
 					...(entry ? { id: entry._id } : {}),
 					accountId: String(form.get("account")) as Id<"accounts">,
 					description: String(form.get("description")),
-					amount: cents(String(form.get("amount"))),
+					amount,
 					date: String(form.get("date")),
 					kind,
 					pending:
@@ -259,13 +265,10 @@ function TransactionEditor({
 							? entry.pending
 							: form.get("pending") === "on",
 					note: String(form.get("note")),
-					splits:
-						kind === "purchase"
-							? splits.map((x) => ({
-									categoryId: x.categoryId as Id<"categories">,
-									amount: cents(x.amount),
-								}))
-							: [],
+					splits: allocations.map((split) => ({
+						...split,
+						categoryId: split.categoryId as Id<"categories">,
+					})),
 					revision: entry?.revision ?? 0,
 				}),
 			)
@@ -315,6 +318,7 @@ function TransactionEditor({
 						name="amount"
 						value={entry?.amount}
 						readOnly={entry?.source === "plaid"}
+						onChange={setTransactionAmount}
 						label="Amount (positive for outflow; negative for income or refund)"
 					/>
 					<label>
@@ -372,7 +376,8 @@ function TransactionEditor({
 									<label>
 										<span className="sr-only">Amount for split {i + 1}</span>
 										<input
-											value={s.amount}
+											value={splits.length === 1 ? transactionAmount : s.amount}
+											readOnly={splits.length === 1}
 											inputMode="decimal"
 											required
 											onChange={(e) =>
@@ -400,7 +405,11 @@ function TransactionEditor({
 								className="secondary"
 								onClick={() =>
 									setSplits([
-										...splits,
+										...splits.map((s) => ({
+											...s,
+											amount:
+												splits.length === 1 ? transactionAmount : s.amount,
+										})),
 										{
 											key: crypto.randomUUID(),
 											categoryId: categories[0]?._id ?? "",
@@ -412,8 +421,9 @@ function TransactionEditor({
 								Add split
 							</button>
 							<p className="muted">
-								Split amounts must total the transaction amount, including its
-								sign.
+								{splits.length === 1
+									? "A single category uses the full transaction amount."
+									: "Split amounts must total the transaction amount, including its sign."}
 							</p>
 						</section>
 					)}
@@ -431,8 +441,15 @@ function TransactionEditor({
 							Pending
 						</label>
 					)}
+					{transactionAmount && amounts.error && (
+						<p className="over" role="alert">
+							{amounts.error}
+						</p>
+					)}
 					<div className="button-row">
-						<button type="submit">Save transaction</button>
+						<button type="submit" disabled={!amounts.data}>
+							Save transaction
+						</button>
 						{entry?.source === "manual" && (
 							<button
 								type="button"
