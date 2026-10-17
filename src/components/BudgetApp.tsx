@@ -171,9 +171,12 @@ export function BudgetApp({ home }: { home: Home }) {
 							<span className="sr-only">Reporting month</span>
 							<input
 								type="month"
+								min="0001-01"
+								max="9999-12"
 								value={month}
 								onChange={(e) => {
-									if (e.target.value) setMonth(e.target.value);
+									if (/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value))
+										setMonth(e.target.value);
 								}}
 							/>
 						</label>

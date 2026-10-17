@@ -329,6 +329,8 @@ function TransactionEditor({
 						<input
 							name="date"
 							type="date"
+							min="0001-01-01"
+							max="9999-12-31"
 							defaultValue={entry?.date ?? `${month}-01`}
 							required
 							readOnly={entry?.source === "plaid"}
