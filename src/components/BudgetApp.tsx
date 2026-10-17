@@ -218,7 +218,11 @@ export function BudgetApp({ home }: { home: Home }) {
 					) : view === "profile" ? (
 						<Profile home={home} run={run} />
 					) : (
-						<AccountsView {...props} home={home} />
+						<AccountsView
+							{...props}
+							home={home}
+							fundedByShared={Boolean(data.fundedBy)}
+						/>
 					)}
 				</div>
 			</main>

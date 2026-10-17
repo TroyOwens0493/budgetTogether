@@ -15,7 +15,11 @@ export function AccountsView({
 	active,
 	run,
 	home,
-}: ViewProps & { home: FunctionReturnType<typeof api.budgets.home> }) {
+	fundedByShared,
+}: ViewProps & {
+	home: FunctionReturnType<typeof api.budgets.home>;
+	fundedByShared: boolean;
+}) {
 	const accounts = useQuery(api.accounts.list, { spaceId });
 	const connections = useQuery(api.accounts.connections, {});
 	const status = useQuery(api.sharing.status, { spaceId });
@@ -304,6 +308,7 @@ export function AccountsView({
 						<ContributionsView
 							key={`${x._id}:${month}`}
 							privateId={spaceId}
+							fundedByShared={fundedByShared}
 							sharedId={x._id}
 							month={month}
 							run={run}

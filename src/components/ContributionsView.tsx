@@ -10,11 +10,13 @@ export function ContributionsView({
 	sharedId,
 	month,
 	run,
+	fundedByShared,
 }: {
 	privateId: Id<"spaces">;
 	sharedId: Id<"spaces">;
 	month: string;
 	run: Run;
+	fundedByShared: boolean;
 }) {
 	const data = useQuery(api.contributions.list, { privateId, sharedId, month });
 	const save = useMutation(api.contributions.savePlanned);
@@ -60,12 +62,19 @@ export function ContributionsView({
 					</button>
 				</div>
 			)}
+			{fundedByShared && (
+				<p>Assign personal funding from the shared monthly budget.</p>
+			)}
 			<form
 				key={snapshot.revision}
 				className="inline-form"
 				onSubmit={async (e) => {
 					e.preventDefault();
-					if ((data.contribution?.revision ?? 0) > snapshot.revision) return;
+					if (
+						fundedByShared ||
+						(data.contribution?.revision ?? 0) > snapshot.revision
+					)
+						return;
 					const form = new FormData(e.currentTarget);
 					const saved = await run(() =>
 						save({
@@ -85,12 +94,16 @@ export function ContributionsView({
 			>
 				<MoneyInput
 					name="planned"
+					readOnly={fundedByShared}
 					value={snapshot.planned}
 					label={`Planned contribution for ${month}`}
 				/>
 				<button
 					type="submit"
-					disabled={(data.contribution?.revision ?? 0) > snapshot.revision}
+					disabled={
+						fundedByShared ||
+						(data.contribution?.revision ?? 0) > snapshot.revision
+					}
 				>
 					Save planned amount
 				</button>
