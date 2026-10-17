@@ -1,5 +1,9 @@
 import { type FormEvent, useState } from "react";
-import { authEmailError, labelError } from "../domain/validation";
+import {
+	authEmailError,
+	labelError,
+	passwordLimits,
+} from "../domain/validation";
 import { authClient } from "../lib/auth-client";
 import { ValidatedInput } from "./ValidatedInput";
 export function Auth() {
@@ -112,9 +116,11 @@ export function Auth() {
 							Password
 							<input
 								name="password"
+								aria-label="Password"
 								type="password"
 								required
-								minLength={mode === "login" ? 1 : 12}
+								minLength={mode === "login" ? 1 : passwordLimits.min}
+								maxLength={mode === "login" ? undefined : passwordLimits.max}
 								autoComplete={
 									mode === "login" ? "current-password" : "new-password"
 								}

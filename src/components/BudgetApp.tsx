@@ -16,7 +16,12 @@ import { type FormEvent, useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { cents, nextMonth } from "../domain/budget";
-import { amountError, labelError, timeZoneError } from "../domain/validation";
+import {
+	amountError,
+	labelError,
+	passwordLimits,
+	timeZoneError,
+} from "../domain/validation";
 import { authClient } from "../lib/auth-client";
 import { AccountsView } from "./AccountsView";
 import { ErrorBanner } from "./ErrorBanner";
@@ -1014,7 +1019,8 @@ function Profile({ home, run }: { home: Home; run: Run }) {
 							<input
 								name="new"
 								type="password"
-								minLength={12}
+								minLength={passwordLimits.min}
+								maxLength={passwordLimits.max}
 								autoComplete="new-password"
 								required
 							/>

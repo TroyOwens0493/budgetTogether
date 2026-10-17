@@ -1,6 +1,7 @@
 import { createClient, type GenericCtx } from "@convex-dev/better-auth";
 import { convex } from "@convex-dev/better-auth/plugins";
 import { betterAuth } from "better-auth/minimal";
+import { passwordLimits } from "../src/domain/validation";
 import { components, internal } from "./_generated/api";
 import type { DataModel } from "./_generated/dataModel";
 import { query } from "./_generated/server";
@@ -18,7 +19,8 @@ export const createAuth = (ctx: GenericCtx<DataModel>) =>
 		database: authComponent.adapter(ctx),
 		emailAndPassword: {
 			enabled: true,
-			minPasswordLength: 12,
+			minPasswordLength: passwordLimits.min,
+			maxPasswordLength: passwordLimits.max,
 			revokeSessionsOnPasswordReset: true,
 			sendResetPassword: async ({ user, url, token }) => {
 				if (!("scheduler" in ctx))

@@ -1,5 +1,7 @@
 import { cents, money } from "./budget";
 
+export const passwordLimits = { min: 12, max: 128 };
+
 // Match Better Auth's email rule, which is stricter than type="email".
 export function authEmailError(value: string): string {
 	return /^(?:[A-Za-z0-9_'+-]+\.)*[A-Za-z0-9_'+-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9-]*\.)+[A-Za-z]{2,}$/.test(
