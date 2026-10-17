@@ -4,6 +4,7 @@ import {
 	amountError,
 	categoryNameError,
 	labelError,
+	partnerEmailError,
 	timeZoneError,
 } from "../src/domain/validation";
 
@@ -33,4 +34,13 @@ test("category names use trimmed, case-insensitive uniqueness and allow the curr
 	assert.equal(categoryNameError(" groceries ", categories, "groceries"), "");
 	assert.equal(categoryNameError("Transport", categories), "");
 	assert.notEqual(categoryNameError(" ", categories), "");
+});
+
+test("invitations reject the sender's email and email domains without a dot", () => {
+	assert.notEqual(
+		partnerEmailError(" ALICE@example.com ", "alice@example.com"),
+		"",
+	);
+	assert.notEqual(partnerEmailError("bob@localhost", "alice@example.com"), "");
+	assert.equal(partnerEmailError(" BOB@example.com ", "alice@example.com"), "");
 });

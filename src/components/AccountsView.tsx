@@ -3,7 +3,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { labelError } from "../domain/validation";
+import { labelError, partnerEmailError } from "../domain/validation";
 import { openPlaid } from "../lib/plaid-link";
 import { ContributionsView } from "./ContributionsView";
 import { ConfirmModal, Modal } from "./ui";
@@ -248,9 +248,18 @@ export function AccountsView({
 									);
 								}}
 							>
-								<label>
+								<label htmlFor="accountsview-email">
 									Partner’s email
-									<input name="email" type="email" required />
+									<ValidatedInput
+										id="accountsview-email"
+										aria-label="Partner’s email"
+										name="email"
+										type="email"
+										required
+										validate={(value) =>
+											partnerEmailError(value, home.user.email)
+										}
+									/>
 								</label>
 								<button
 									type="submit"

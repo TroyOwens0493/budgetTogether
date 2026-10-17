@@ -15,6 +15,14 @@ export function timeZoneError(value: string): string {
 	}
 }
 
+export function partnerEmailError(value: string, ownEmail: string): string {
+	const email = value.trim().toLowerCase();
+	return !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+		email === ownEmail.toLowerCase()
+		? "Enter your partner’s email address."
+		: "";
+}
+
 export function amountError(value: string, allowNegative = false): string {
 	try {
 		money(cents(value), !allowNegative);

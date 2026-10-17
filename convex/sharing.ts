@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { partnerEmailError } from "../src/domain/validation";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -123,11 +124,8 @@ export const storeInvite = internalMutation({
 		if (space.type !== "shared")
 			throw new ConvexError("Invite a partner from a shared budget.");
 		const email = args.email.trim().toLowerCase();
-		if (
-			!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-			email === current.email.toLowerCase()
-		)
-			throw new ConvexError("Enter your partner’s email address.");
+		const error = partnerEmailError(email, current.email);
+		if (error) throw new ConvexError(error);
 		const members = await ctx.db
 			.query("memberships")
 			.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
