@@ -318,6 +318,7 @@ function TransactionEditor({
 					</label>
 					<MoneyInput
 						name="amount"
+						allowNegative
 						value={entry?.amount}
 						readOnly={entry?.source === "plaid"}
 						onChange={setTransactionAmount}

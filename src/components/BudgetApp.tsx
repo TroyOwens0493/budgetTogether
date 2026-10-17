@@ -16,7 +16,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { cents, nextMonth } from "../domain/budget";
-import { labelError } from "../domain/validation";
+import { amountError, labelError } from "../domain/validation";
 import { authClient } from "../lib/auth-client";
 import { AccountsView } from "./AccountsView";
 import { ErrorBanner } from "./ErrorBanner";
@@ -615,9 +615,12 @@ function PlanView({
 								is {usd(data.funds.personalIncoming)} for this month.
 							</p>
 						) : (
-							<label>
+							<label htmlFor="budgetapp-expected">
 								Expected take-home income
-								<input
+								<ValidatedInput
+									id="budgetapp-expected"
+									aria-label="Expected take-home income"
+									validate={amountError}
 									name="expected"
 									defaultValue={(expected / 100).toFixed(2)}
 									inputMode="decimal"
@@ -627,9 +630,16 @@ function PlanView({
 							</label>
 						)}
 						{data.categories.map((c) => (
-							<label className="allocation-row" key={c._id}>
+							<label
+								htmlFor={`limit-${c._id}`}
+								className="allocation-row"
+								key={c._id}
+							>
 								<span>{c.name}</span>
-								<input
+								<ValidatedInput
+									id={`limit-${c._id}`}
+									aria-label={c.name}
+									validate={amountError}
 									name={c._id}
 									defaultValue={(limits[c._id] / 100).toFixed(2)}
 									inputMode="decimal"
@@ -643,9 +653,12 @@ function PlanView({
 							</label>
 						))}
 						<div className="divider" />
-						<label className="allocation-row">
+						<label htmlFor="budgetapp-target" className="allocation-row">
 							<span>Monthly savings target</span>
-							<input
+							<ValidatedInput
+								id="budgetapp-target"
+								aria-label="Monthly savings target"
+								validate={amountError}
 								name="target"
 								defaultValue={(target / 100).toFixed(2)}
 								inputMode="decimal"
@@ -836,9 +849,12 @@ function ReviewView({
 									))}
 								</select>
 							</label>
-							<label>
+							<label htmlFor={`carry-${row.key}`}>
 								Amount
-								<input
+								<ValidatedInput
+									id={`carry-${row.key}`}
+									aria-label="Amount"
+									validate={amountError}
 									value={row.amount}
 									inputMode="decimal"
 									required

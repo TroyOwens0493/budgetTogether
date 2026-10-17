@@ -1,4 +1,6 @@
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useId, useRef, useState } from "react";
+import { amountError } from "../domain/validation";
+import { ValidatedInput } from "./ValidatedInput";
 export const usd = (value: number) =>
 	new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
 		value / 100,
@@ -10,6 +12,7 @@ export function MoneyInput({
 	label,
 	required = true,
 	readOnly = false,
+	allowNegative = false,
 	onChange,
 }: {
 	name: string;
@@ -17,21 +20,27 @@ export function MoneyInput({
 	label: string;
 	required?: boolean;
 	readOnly?: boolean;
+	allowNegative?: boolean;
 	onChange?: (value: string) => void;
 }) {
+	const id = useId();
 	return (
-		<label>
+		<label htmlFor={id}>
 			{label}
 			<span className="money-input">
 				<span>$</span>
-				<input
+				<ValidatedInput
+					id={id}
+					aria-label={label}
 					name={name}
 					defaultValue={value === undefined ? "" : amount(value)}
 					inputMode="decimal"
 					readOnly={readOnly}
 					onChange={(e) => onChange?.(e.target.value)}
 					required={required}
-					pattern="-?[0-9]+(\.[0-9]{1,2})?"
+					validate={(value) =>
+						!required && !value ? "" : amountError(value, allowNegative)
+					}
 				/>
 			</span>
 		</label>
