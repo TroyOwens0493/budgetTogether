@@ -1,5 +1,5 @@
 import { type FormEvent, useState } from "react";
-import { labelError } from "../domain/validation";
+import { authEmailError, labelError } from "../domain/validation";
 import { authClient } from "../lib/auth-client";
 import { ValidatedInput } from "./ValidatedInput";
 export function Auth() {
@@ -94,9 +94,17 @@ export function Auth() {
 						</label>
 					)}
 					{mode !== "reset" && (
-						<label>
+						<label htmlFor="auth-email">
 							Email
-							<input name="email" type="email" required autoComplete="email" />
+							<ValidatedInput
+								id="auth-email"
+								aria-label="Email"
+								name="email"
+								type="email"
+								validate={authEmailError}
+								required
+								autoComplete="email"
+							/>
 						</label>
 					)}
 					{mode !== "request" && (

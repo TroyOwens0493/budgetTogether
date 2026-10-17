@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
 	amountError,
+	authEmailError,
 	categoryNameError,
 	labelError,
 	partnerEmailError,
@@ -43,4 +44,15 @@ test("invitations reject the sender's email and email domains without a dot", ()
 	);
 	assert.notEqual(partnerEmailError("bob@localhost", "alice@example.com"), "");
 	assert.equal(partnerEmailError(" BOB@example.com ", "alice@example.com"), "");
+});
+
+test("auth emails catch formats accepted by browsers but rejected by Better Auth", () => {
+	for (const value of [
+		"alice@localhost",
+		"alice..smith@example.com",
+		".alice@example.com",
+	])
+		assert.notEqual(authEmailError(value), "", value);
+	for (const value of ["alice@example.com", "alice.smith+budget@example.co.uk"])
+		assert.equal(authEmailError(value), "", value);
 });

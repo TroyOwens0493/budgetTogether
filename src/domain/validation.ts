@@ -1,5 +1,14 @@
 import { cents, money } from "./budget";
 
+// Match Better Auth's email rule, which is stricter than type="email".
+export function authEmailError(value: string): string {
+	return /^(?:[A-Za-z0-9_'+-]+\.)*[A-Za-z0-9_'+-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9-]*\.)+[A-Za-z]{2,}$/.test(
+		value,
+	)
+		? ""
+		: "Enter a valid email address, such as name@example.com.";
+}
+
 export function labelError(value: string, maximum = 100): string {
 	return !value.trim() || value.trim().length > maximum
 		? `Enter between 1 and ${maximum} characters.`
