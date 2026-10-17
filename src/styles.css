@@ -703,6 +703,40 @@ dd {
 .money-input input {
 	border: 0;
 }
+.validated-input {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+	width: 100%;
+}
+.validated-input small {
+	color: #91412c;
+	font-weight: 400;
+	line-height: 1.4;
+}
+.validated-input input[aria-invalid="true"] {
+	border-color: #91412c;
+}
+.allocation-row > .validated-input {
+	width: min(135px, 50%);
+	flex-shrink: 0;
+}
+.allocation-row .validated-input input {
+	width: 100%;
+}
+.money-input {
+	align-items: flex-start;
+}
+.money-input > span:first-child {
+	padding-top: 11px;
+}
+.money-input > .validated-input {
+	padding: 0;
+	color: inherit;
+}
+.money-input .validated-input small {
+	padding: 0 12px 8px;
+}
 .narrow {
 	max-width: 680px;
 }

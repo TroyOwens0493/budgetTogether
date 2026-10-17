@@ -16,6 +16,7 @@ import { type FormEvent, useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { cents, nextMonth } from "../domain/budget";
+import { labelError } from "../domain/validation";
 import { authClient } from "../lib/auth-client";
 import { AccountsView } from "./AccountsView";
 import { ErrorBanner } from "./ErrorBanner";
@@ -23,6 +24,7 @@ import { PersonalAllocationsView } from "./PersonalAllocationsView";
 import { SpendingChart } from "./SpendingChart";
 import { TransactionsView } from "./TransactionsView";
 import { Modal, usd } from "./ui";
+import { ValidatedInput } from "./ValidatedInput";
 import type { Run, ViewProps } from "./view-types";
 
 type Home = FunctionReturnType<typeof api.budgets.home>;
@@ -927,9 +929,12 @@ function Profile({ home, run }: { home: Home; run: Run }) {
 					});
 				}}
 			>
-				<label>
+				<label htmlFor="budgetapp-name">
 					Name
-					<input
+					<ValidatedInput
+						id="budgetapp-name"
+						aria-label="Name"
+						validate={labelError}
 						name="name"
 						defaultValue={home.profile!.name}
 						required

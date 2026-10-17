@@ -4,7 +4,9 @@ import { type FormEvent, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { parseTransactionAmounts } from "../domain/transaction-input";
+import { labelError } from "../domain/validation";
 import { amount, ConfirmModal, Modal, MoneyInput, usd } from "./ui";
+import { ValidatedInput } from "./ValidatedInput";
 import type { ViewProps } from "./view-types";
 export function TransactionsView({
 	spaceId,
@@ -302,9 +304,12 @@ function TransactionEditor({
 					{!accounts.some((x) => x.active) && !entry && (
 						<p>Connect a bank in Accounts & settings first.</p>
 					)}
-					<label>
+					<label htmlFor="transactionsview-description">
 						Description
-						<input
+						<ValidatedInput
+							id="transactionsview-description"
+							aria-label="Description"
+							validate={(value) => labelError(value, 200)}
 							name="description"
 							defaultValue={entry?.description}
 							required
@@ -563,9 +568,12 @@ function CategoryEditor({
 					if (saved) onClose();
 				}}
 			>
-				<label>
+				<label htmlFor="transactionsview-name">
 					Name
-					<input
+					<ValidatedInput
+						id="transactionsview-name"
+						aria-label="Name"
+						validate={labelError}
 						name="name"
 						defaultValue={current?.name ?? ""}
 						required

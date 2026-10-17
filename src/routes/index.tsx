@@ -4,6 +4,8 @@ import { type FormEvent, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { Auth } from "../components/Auth";
 import { BudgetApp } from "../components/BudgetApp";
+import { ValidatedInput } from "../components/ValidatedInput";
+import { labelError } from "../domain/validation";
 export const Route = createFileRoute("/")({ component: Home });
 function Home() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
@@ -51,9 +53,12 @@ function Account() {
 					after this step.
 				</p>
 				<form onSubmit={submit}>
-					<label>
+					<label htmlFor="setup-name">
 						Your name
-						<input
+						<ValidatedInput
+							validate={labelError}
+							id="setup-name"
+							aria-label="Your name"
 							name="name"
 							defaultValue={home.user.name}
 							required

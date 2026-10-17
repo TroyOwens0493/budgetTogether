@@ -3,9 +3,11 @@ import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { labelError } from "../domain/validation";
 import { openPlaid } from "../lib/plaid-link";
 import { ContributionsView } from "./ContributionsView";
 import { ConfirmModal, Modal } from "./ui";
+import { ValidatedInput } from "./ValidatedInput";
 import type { ViewProps } from "./view-types";
 export function AccountsView({
 	spaceId,
@@ -330,9 +332,12 @@ export function AccountsView({
 							}
 						}}
 					>
-						<label>
+						<label htmlFor="accountsview-name">
 							Account name
-							<input
+							<ValidatedInput
+								id="accountsview-name"
+								aria-label="Account name"
+								validate={labelError}
 								name="name"
 								defaultValue={renaming.name}
 								required

@@ -1,5 +1,7 @@
 import { type FormEvent, useState } from "react";
+import { labelError } from "../domain/validation";
 import { authClient } from "../lib/auth-client";
+import { ValidatedInput } from "./ValidatedInput";
 export function Auth() {
 	const token =
 		typeof window === "undefined"
@@ -78,9 +80,17 @@ export function Auth() {
 				)}
 				<form onSubmit={submit}>
 					{mode === "register" && (
-						<label>
+						<label htmlFor="auth-name">
 							Name
-							<input name="name" required autoComplete="name" maxLength={100} />
+							<ValidatedInput
+								id="auth-name"
+								aria-label="Name"
+								name="name"
+								validate={labelError}
+								required
+								autoComplete="name"
+								maxLength={100}
+							/>
 						</label>
 					)}
 					{mode !== "reset" && (
