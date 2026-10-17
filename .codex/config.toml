@@ -1,0 +1,4 @@
+[mcp_servers.playwright]
+command = "pnpm"
+args = ["exec", "playwright-mcp", "--headless", "--browser", "chromium", "--output-dir", ".playwright-mcp"]
+startup_timeout_sec = 30

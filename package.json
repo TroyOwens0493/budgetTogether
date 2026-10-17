@@ -15,7 +15,11 @@
     "lint": "biome lint",
     "check": "biome check",
     "test": "node --experimental-strip-types --import ./tests/register.ts --test tests/*.test.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:report": "playwright show-report",
+    "playwright:install": "playwright install chromium && playwright-mcp install-browser chromium"
   },
   "dependencies": {
     "@convex-dev/better-auth": "0.12.5",
@@ -35,6 +39,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.5",
+    "@playwright/mcp": "0.0.83",
+    "@playwright/test": "1.64.1",
     "@tailwindcss/typography": "^0.5.16",
     "@tanstack/devtools-vite": "latest",
     "@tanstack/router-cli": "^1.132.0",

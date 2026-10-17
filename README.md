@@ -107,6 +107,23 @@ pnpm build
 
 Tests use Node's built-in test runner. Accounting tests cover cents, balance, refunds, transfers, pending entries, splits, carry-forward, and recurring estimates. Backend tests exercise the actual query/mutation handlers against an in-memory database with stubbed authentication. They check direct private access, stale edits, repeated reviews, account moves, departure cutoffs, contribution matches, and import idempotency. They do not replace live Convex, Plaid, or Resend integration tests.
 
+## Browser tests and Playwright MCP
+
+Playwright Test and Microsoft's Playwright MCP are development dependencies with pinned versions. Install their Chromium browsers after installing dependencies:
+
+```sh
+pnpm playwright:install
+pnpm test:e2e
+```
+
+The tests use http://localhost:3000. They reuse a running development server or start `pnpm dev` when needed. Configure `.env.local` as described above before running them. CI requires a free port 3000 and starts its own server. On a supported Linux CI image, install system dependencies with `pnpm exec playwright install-deps chromium`.
+
+The initial tests check the sign-in, registration, and password-reset screens without creating accounts or sending email. They require the configured Convex development deployment to be available. Node unit tests remain under `pnpm test`.
+
+Use `pnpm test:e2e:ui` for the test UI and `pnpm test:e2e:report` for the HTML report. To test an existing server at another address, run `PLAYWRIGHT_BASE_URL=http://localhost:3001 pnpm test:e2e`. This skips automatic server startup. Reports, failure screenshots, and traces are ignored by Git.
+
+The project configuration at `.codex/config.toml` registers the `playwright` MCP server for Codex. It uses the local package and runs Chromium without a visible window. MCP output goes in `.playwright-mcp/`, which is ignored by Git. Start a new Codex session in this project after setup so it can load the server. Check the configuration with `codex mcp get playwright`. See the [Playwright MCP documentation](https://github.com/microsoft/playwright-mcp) and [official OpenAI MCP documentation](https://developers.openai.com/codex/mcp).
+
 ## Current verification limits
 
 The backend has been deployed to the configured Convex development deployment, and its API declarations have been regenerated. Budget edits have been tested in the authenticated UI, including repeated saves and persistence after a page reload. Keep `pnpm exec convex dev` running with `pnpm dev` so backend requests stay in sync with the UI. To sync the backend once, run `pnpm exec convex dev --once`. Registration, reset emails, partner emails, Plaid Link/imports, and two-browser collaboration still need live integration testing.
