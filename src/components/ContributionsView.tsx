@@ -65,6 +65,7 @@ export function ContributionsView({
 				className="inline-form"
 				onSubmit={async (e) => {
 					e.preventDefault();
+					if ((data.contribution?.revision ?? 0) > snapshot.revision) return;
 					const form = new FormData(e.currentTarget);
 					const saved = await run(() =>
 						save({
@@ -87,7 +88,12 @@ export function ContributionsView({
 					value={snapshot.planned}
 					label={`Planned contribution for ${month}`}
 				/>
-				<button type="submit">Save planned amount</button>
+				<button
+					type="submit"
+					disabled={(data.contribution?.revision ?? 0) > snapshot.revision}
+				>
+					Save planned amount
+				</button>
 			</form>
 			<h3>Suggested bank matches</h3>
 			<p>Confirm a match only when these entries record the same transfer.</p>

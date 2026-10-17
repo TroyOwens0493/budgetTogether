@@ -563,7 +563,7 @@ function PlanView({
 	async function submit(e: FormEvent<HTMLFormElement>) {
 		e.preventDefault();
 		const form = new FormData(e.currentTarget);
-		if (saving) return;
+		if (saving || (data.plan?.revision ?? 0) > revision) return;
 		setSaving(true);
 		const saved = await run(
 			() =>
@@ -721,7 +721,15 @@ function PlanView({
 							? "✓ Every dollar has a place."
 							: "Adjust your plan until this amount is zero."}
 					</p>
-					<button type="submit" disabled={!active || saving || balance !== 0}>
+					<button
+						type="submit"
+						disabled={
+							!active ||
+							saving ||
+							balance !== 0 ||
+							(data.plan?.revision ?? 0) > revision
+						}
+					>
 						{saving ? "Saving…" : "Save budget"}
 					</button>
 				</aside>
@@ -780,6 +788,7 @@ function ReviewView({
 	const available = Math.max(0, data.savings - (data.plan?.savingsTarget ?? 0));
 	async function submit(e: FormEvent<HTMLFormElement>) {
 		e.preventDefault();
+		if ((data.plan?.revision ?? 0) > revision) return;
 		const saved = await run(
 			() =>
 				review({
@@ -924,7 +933,11 @@ function ReviewView({
 					)}
 					<button
 						type="submit"
-						disabled={reserved > available || !data.plan?.saved}
+						disabled={
+							reserved > available ||
+							!data.plan?.saved ||
+							(data.plan?.revision ?? 0) > revision
+						}
 					>
 						{data.plan?.reviewed
 							? "Update monthly review"
