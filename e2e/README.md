@@ -30,10 +30,3 @@ The test server binds only to `127.0.0.1`, does not read environment files, and 
 never part of the app server or build. Each test deletes its household and closes
 its contexts in teardown. Server shutdown removes any state left by an interrupted
 run. Do not use these fixture endpoints in the deployed app.
-
-Suggested addition to the root README's browser-test section:
-
-> Isolated authenticated task tests are also available. Run
-> `pnpm exec playwright test --config e2e/tasks.config.ts`. These use real budget UI
-> and backend handlers with local test sessions and an in-memory database. They
-> require no deployed services. See `e2e/README.md` for scope and limits.

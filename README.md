@@ -122,6 +122,8 @@ The initial tests check the sign-in, registration, and password-reset screens wi
 
 Use `pnpm test:e2e:ui` for the test UI and `pnpm test:e2e:report` for the HTML report. To test an existing server at another address, run `PLAYWRIGHT_BASE_URL=http://localhost:3001 pnpm test:e2e`. This skips automatic server startup. Reports, failure screenshots, and traces are ignored by Git.
 
+Run isolated authenticated task tests with `pnpm exec playwright test --config e2e/tasks.config.ts`. These use the real budget UI and backend handlers with local test sessions and an in-memory database. They require no deployed services. See [the browser test guide](e2e/README.md) for setup, coverage, and limits.
+
 The project configuration at `.codex/config.toml` registers the `playwright` MCP server for Codex. It uses the local package and runs Chromium without a visible window. MCP output goes in `.playwright-mcp/`, which is ignored by Git. Start a new Codex session in this project after setup so it can load the server. Check the configuration with `codex mcp get playwright`. See the [Playwright MCP documentation](https://github.com/microsoft/playwright-mcp) and [official OpenAI MCP documentation](https://developers.openai.com/codex/mcp).
 
 ## Current verification limits
