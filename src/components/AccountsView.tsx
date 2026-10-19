@@ -301,14 +301,19 @@ export function AccountsView({
 					)}
 				</section>
 			)}
+			{space.type === "private" && fundedByShared && (
+				<section className="panel">
+					<h2>Personal funding</h2>
+					<p>Assign personal funding from the shared monthly budget.</p>
+				</section>
+			)}
 			{space.type === "private" &&
 				home.spaces
-					.filter((x) => x.type === "shared" && x.active)
+					.filter((x) => x.type === "shared")
 					.map((x) => (
 						<ContributionsView
 							key={`${x._id}:${month}`}
 							privateId={spaceId}
-							fundedByShared={fundedByShared}
 							sharedId={x._id}
 							month={month}
 							run={run}
