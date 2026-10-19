@@ -1,5 +1,4 @@
 import { useMutation } from "convex/react";
-import type { FunctionReturnType } from "convex/server";
 import { type FormEvent, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { nextMonth } from "../domain/budget";
@@ -8,9 +7,8 @@ import { amountError } from "../domain/validation";
 import { PersonalAllocationsView } from "./PersonalAllocationsView";
 import { usd } from "./ui";
 import { ValidatedInput } from "./ValidatedInput";
-import type { ViewProps } from "./view-types";
+import type { Dashboard, ViewProps } from "./view-types";
 
-type Dashboard = FunctionReturnType<typeof api.budgets.dashboard>;
 const draftMoney = (value: number | null) =>
 	value === null ? "Check amounts" : usd(value);
 
