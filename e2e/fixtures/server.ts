@@ -8,6 +8,7 @@ const server = await createServer({
 	configFile: false,
 	envDir: false,
 	root,
+	cacheDir: `${root}/node_modules/.vite-budget-tasks`,
 	plugins: [
 		react(),
 		{

@@ -13,6 +13,9 @@ Install the existing dependencies and Playwright Chromium first. The task tests
 need a free loopback port 3100. They need no `.env.local`, deployment, accounts,
 email service, or bank connection. They run with the existing Node 24+ requirement.
 
+Task tests use a separate Vite cache, `test-results-tasks/`, and
+`playwright-report-tasks/` so they can run beside the app and public-screen suite.
+
 Each test creates an in-memory household and separate Alice and Bob browser
 contexts. An HTTP-only test session cookie supplies identity. Tests use the real
 `BudgetApp`, input validation, and Convex query/mutation handlers, including access,

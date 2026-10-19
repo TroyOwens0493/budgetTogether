@@ -7,6 +7,19 @@ export default defineConfig({
 	testDir: ".",
 	testMatch: "tasks.spec.ts",
 	testIgnore: [],
+	outputDir: fileURLToPath(new URL("../test-results-tasks", import.meta.url)),
+	reporter: [
+		["list"],
+		[
+			"html",
+			{
+				open: "never",
+				outputFolder: fileURLToPath(
+					new URL("../playwright-report-tasks", import.meta.url),
+				),
+			},
+		],
+	],
 	use: { ...config.use, baseURL: "http://127.0.0.1:3100" },
 	webServer: {
 		cwd: fileURLToPath(new URL("..", import.meta.url)),
