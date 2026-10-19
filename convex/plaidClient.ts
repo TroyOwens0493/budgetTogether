@@ -134,7 +134,7 @@ export type PlaidTransaction = {
 export type SyncPage = {
 	added: PlaidTransaction[];
 	modified: PlaidTransaction[];
-	removed: { transaction_id: string }[];
+	removed: { transaction_id: string; account_id: string }[];
 	next_cursor: string;
 	has_more: boolean;
 	accounts: PlaidAccount[];

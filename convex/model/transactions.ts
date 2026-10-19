@@ -24,7 +24,8 @@ export async function list(
 ) {
 	const cutoff = await readCutoff(ctx, args.spaceId);
 	month(args.month);
-	const rows = await ctx.db
+	const size = Math.max(1, Math.min(100, Math.floor(args.limit ?? 30)));
+	const result = await ctx.db
 		.query("transactions")
 		.withIndex("by_space_date", (q) =>
 			q
@@ -33,8 +34,14 @@ export async function list(
 				.lt("date", `${nextMonth(args.month)}-01`),
 		)
 		.order("desc")
-		.collect();
-	const matches = rows.filter(
+		.paginate({
+			cursor: args.cursor ?? null,
+			numItems: size,
+			maximumRowsRead: size,
+			maximumBytesRead: 512_000,
+		});
+	// Filter only this bounded index block. Sparse matches can produce empty pages.
+	const matches = result.page.filter(
 		(x) =>
 			x._creationTime <= cutoff &&
 			!x.removed &&
@@ -46,15 +53,9 @@ export async function list(
 				x.splits.some((s) => s.categoryId === args.categoryId)) &&
 			(!args.accountId || x.accountId === args.accountId),
 	);
-	const offset = args.cursor
-		? matches.findIndex((x) => x._id === args.cursor) + 1
-		: 0;
-	const size = Math.max(1, Math.min(100, args.limit ?? 30));
-	const page = matches.slice(offset, offset + size);
 	return {
-		rows: page,
-		next: offset + size < matches.length ? page.at(-1)?._id : null,
-		total: matches.length,
+		rows: matches,
+		next: result.isDone ? null : result.continueCursor,
 	};
 }
 

@@ -1,5 +1,6 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
+import { removedValidator, txValidator } from "./bankTypes";
 export const split = v.object({
 	categoryId: v.id("categories"),
 	amount: v.number(),
@@ -68,6 +69,7 @@ export default defineSchema({
 		institutionId: v.string(),
 		accessToken: v.string(),
 		cursor: v.optional(v.string()),
+		syncRunId: v.optional(v.id("bankSyncRuns")),
 		pendingAccounts: v.optional(v.array(bankAccount)),
 		status: v.string(),
 		lastSync: v.optional(v.number()),
@@ -75,6 +77,27 @@ export default defineSchema({
 	})
 		.index("by_user", ["userId"])
 		.index("by_item", ["itemId"]),
+	bankSyncRuns: defineTable({
+		connectionId: v.id("connections"),
+		startCursor: v.optional(v.string()),
+		cursor: v.optional(v.string()),
+		pages: v.number(),
+		position: v.number(),
+		phase: v.union(
+			v.literal("fetching"),
+			v.literal("changes"),
+			v.literal("removals"),
+		),
+		restarts: v.number(),
+		paused: v.optional(v.boolean()),
+		watchdogAt: v.optional(v.number()),
+	}),
+	bankSyncBatches: defineTable({
+		runId: v.id("bankSyncRuns"),
+		page: v.number(),
+		changed: v.array(txValidator),
+		removed: v.array(removedValidator),
+	}).index("by_run_page", ["runId", "page"]),
 	accounts: defineTable({
 		userId: v.string(),
 		connectionId: v.optional(v.id("connections")),
@@ -100,7 +123,9 @@ export default defineSchema({
 		color: v.string(),
 		order: v.number(),
 		revision: v.number(),
-	}).index("by_space", ["spaceId"]),
+	})
+		.index("by_space", ["spaceId"])
+		.index("by_space_name", ["spaceId", "name"]),
 	plans: defineTable({
 		spaceId: v.id("spaces"),
 		month: v.string(),
@@ -117,6 +142,7 @@ export default defineSchema({
 		accountId: v.id("accounts"),
 		spaceId: v.id("spaces"),
 		externalId: v.optional(v.string()),
+		pendingExternalId: v.optional(v.string()),
 		source: v.union(v.literal("manual"), v.literal("plaid")),
 		description: v.string(),
 		amount: v.number(),
@@ -132,6 +158,7 @@ export default defineSchema({
 		reconciledWith: v.optional(v.id("transactions")),
 	})
 		.index("by_space_date", ["spaceId", "date"])
+		.index("by_pending_external", ["accountId", "pendingExternalId"])
 		.index("by_external", ["accountId", "externalId"]),
 	personalAllocations: defineTable({
 		privateId: v.id("spaces"),

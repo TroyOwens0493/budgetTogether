@@ -18,7 +18,11 @@ export function TransactionsView({
 	const [search, setSearch] = useState("");
 	const [category, setCategory] = useState("");
 	const [account, setAccount] = useState("");
-	const [cursor, setCursor] = useState<string | undefined>();
+	const [page, setPage] = useState<{ key: string; cursor?: string }>();
+	const pageKey = JSON.stringify([spaceId, month, search, category, account]);
+	const cursor = page?.key === pageKey ? page.cursor : undefined;
+	const setCursor = (cursor: string | undefined) =>
+		setPage({ key: pageKey, cursor });
 	const [editing, setEditing] = useState<
 		Doc<"transactions"> | null | undefined
 	>();
@@ -157,28 +161,35 @@ export function TransactionsView({
 				</div>
 				{!rows ? (
 					<p className="empty-state">Loading transactions…</p>
-				) : !rows.rows.length ? (
-					<p className="empty-state">No transactions match these filters.</p>
 				) : (
-					<div className="pagination">
-						<span>{rows.total} matching transactions</span>
-						<button
-							type="button"
-							className="secondary"
-							disabled={!cursor}
-							onClick={() => setCursor(undefined)}
-						>
-							First page
-						</button>
-						<button
-							type="button"
-							className="secondary"
-							disabled={!rows.next}
-							onClick={() => setCursor(rows.next ?? undefined)}
-						>
-							Next page
-						</button>
-					</div>
+					<>
+						{!rows.rows.length && (
+							<p className="empty-state">
+								{rows.next
+									? "No matches on this page. Check the next page."
+									: "No more transactions match these filters."}
+							</p>
+						)}
+						<div className="pagination">
+							<span>{rows.rows.length} transactions on this page</span>
+							<button
+								type="button"
+								className="secondary"
+								disabled={!cursor}
+								onClick={() => setCursor(undefined)}
+							>
+								First page
+							</button>
+							<button
+								type="button"
+								className="secondary"
+								disabled={!rows.next}
+								onClick={() => setCursor(rows.next ?? undefined)}
+							>
+								Next page
+							</button>
+						</div>
+					</>
 				)}
 			</section>
 			{editing !== undefined && accounts && (
@@ -234,6 +245,7 @@ function TransactionEditor({
 		],
 	);
 	const [match, setMatch] = useState("");
+	const [importCursor, setImportCursor] = useState<string | undefined>();
 	const [deleting, setDeleting] = useState(false);
 	const amounts = parseTransactionAmounts(kind, transactionAmount, splits);
 	const imports = useQuery(
@@ -244,6 +256,7 @@ function TransactionEditor({
 					month: entry.date.slice(0, 7),
 					accountId: entry.accountId,
 					limit: 100,
+					cursor: importCursor,
 				}
 			: "skip",
 	);
@@ -479,6 +492,30 @@ function TransactionEditor({
 								))}
 						</select>
 					</label>
+					<div className="button-row">
+						<button
+							type="button"
+							className="secondary"
+							disabled={!importCursor}
+							onClick={() => {
+								setImportCursor(undefined);
+								setMatch("");
+							}}
+						>
+							First page of imports
+						</button>
+						<button
+							type="button"
+							className="secondary"
+							disabled={!imports?.next}
+							onClick={() => {
+								setImportCursor(imports?.next ?? undefined);
+								setMatch("");
+							}}
+						>
+							Next page of imports
+						</button>
+					</div>
 					<button
 						type="button"
 						className="secondary"
