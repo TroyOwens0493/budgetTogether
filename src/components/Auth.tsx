@@ -1,5 +1,11 @@
 import { type FormEvent, useState } from "react";
+import {
+	authEmailError,
+	labelError,
+	passwordLimits,
+} from "../domain/validation";
 import { authClient } from "../lib/auth-client";
+import { ValidatedInput } from "./ValidatedInput";
 export function Auth() {
 	const token =
 		typeof window === "undefined"
@@ -78,15 +84,31 @@ export function Auth() {
 				)}
 				<form onSubmit={submit}>
 					{mode === "register" && (
-						<label>
+						<label htmlFor="auth-name">
 							Name
-							<input name="name" required autoComplete="name" maxLength={100} />
+							<ValidatedInput
+								id="auth-name"
+								aria-label="Name"
+								name="name"
+								validate={labelError}
+								required
+								autoComplete="name"
+								maxLength={100}
+							/>
 						</label>
 					)}
 					{mode !== "reset" && (
-						<label>
+						<label htmlFor="auth-email">
 							Email
-							<input name="email" type="email" required autoComplete="email" />
+							<ValidatedInput
+								id="auth-email"
+								aria-label="Email"
+								name="email"
+								type="email"
+								validate={authEmailError}
+								required
+								autoComplete="email"
+							/>
 						</label>
 					)}
 					{mode !== "request" && (
@@ -94,9 +116,11 @@ export function Auth() {
 							Password
 							<input
 								name="password"
+								aria-label="Password"
 								type="password"
 								required
-								minLength={mode === "login" ? 1 : 12}
+								minLength={mode === "login" ? 1 : passwordLimits.min}
+								maxLength={mode === "login" ? undefined : passwordLimits.max}
 								autoComplete={
 									mode === "login" ? "current-password" : "new-password"
 								}

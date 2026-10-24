@@ -1,4 +1,5 @@
 import { ConvexError } from "convex/values";
+import { labelError } from "../src/domain/validation";
 import type { Id } from "./_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { authComponent } from "./auth";
@@ -34,8 +35,8 @@ export async function privateSpace(ctx: DbCtx, userId: string) {
 }
 export function label(value: string, maximum = 100): string {
 	const result = value.trim();
-	if (!result || result.length > maximum)
-		throw new ConvexError(`Enter between 1 and ${maximum} characters.`);
+	const error = labelError(value, maximum);
+	if (error) throw new ConvexError(error);
 	return result;
 }
 

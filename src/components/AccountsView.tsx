@@ -3,9 +3,11 @@ import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { labelError, partnerEmailError } from "../domain/validation";
 import { openPlaid } from "../lib/plaid-link";
 import { ContributionsView } from "./ContributionsView";
 import { ConfirmModal, Modal } from "./ui";
+import { ValidatedInput } from "./ValidatedInput";
 import type { ViewProps } from "./view-types";
 export function AccountsView({
 	spaceId,
@@ -13,7 +15,11 @@ export function AccountsView({
 	active,
 	run,
 	home,
-}: ViewProps & { home: FunctionReturnType<typeof api.budgets.home> }) {
+	fundedByShared,
+}: ViewProps & {
+	home: FunctionReturnType<typeof api.budgets.home>;
+	fundedByShared: boolean;
+}) {
 	const accounts = useQuery(api.accounts.list, { spaceId });
 	const connections = useQuery(api.accounts.connections, {});
 	const status = useQuery(api.sharing.status, { spaceId });
@@ -246,9 +252,18 @@ export function AccountsView({
 									);
 								}}
 							>
-								<label>
+								<label htmlFor="accountsview-email">
 									Partner’s email
-									<input name="email" type="email" required />
+									<ValidatedInput
+										id="accountsview-email"
+										aria-label="Partner’s email"
+										name="email"
+										type="email"
+										required
+										validate={(value) =>
+											partnerEmailError(value, home.user.email)
+										}
+									/>
 								</label>
 								<button
 									type="submit"
@@ -286,9 +301,15 @@ export function AccountsView({
 					)}
 				</section>
 			)}
+			{space.type === "private" && fundedByShared && (
+				<section className="panel">
+					<h2>Personal funding</h2>
+					<p>Assign personal funding from the shared monthly budget.</p>
+				</section>
+			)}
 			{space.type === "private" &&
 				home.spaces
-					.filter((x) => x.type === "shared" && x.active)
+					.filter((x) => x.type === "shared")
 					.map((x) => (
 						<ContributionsView
 							key={`${x._id}:${month}`}
@@ -330,9 +351,12 @@ export function AccountsView({
 							}
 						}}
 					>
-						<label>
+						<label htmlFor="accountsview-name">
 							Account name
-							<input
+							<ValidatedInput
+								id="accountsview-name"
+								aria-label="Account name"
+								validate={labelError}
 								name="name"
 								defaultValue={renaming.name}
 								required
@@ -374,18 +398,20 @@ export function AccountsView({
 			{leaving && (
 				<ConfirmModal
 					title="Leave shared budget"
-					confirmLabel="Leave shared budget"
+					confirmLabel="Leave and delete shared budget"
 					onClose={() => setLeaving(null)}
 					onConfirm={() =>
 						run(
 							() => leave({ spaceId: leaving }),
-							"You left the shared budget.",
+							"Shared budget deleted for both people.",
 						)
 					}
 				>
 					<p>
-						Your accounts return to your private budget. The other partner keeps
-						this budget. You keep read access to previously shared records.
+						Leaving permanently deletes this shared budget and all its records
+						for both people. This cannot be undone. Each person's accounts
+						return to their private budget. Private records and bank connections
+						are kept.
 					</p>
 				</ConfirmModal>
 			)}
@@ -432,7 +458,7 @@ export function AccountsView({
 	);
 }
 
-function AccountReview({
+export function AccountReview({
 	id,
 	run,
 	close,
@@ -448,7 +474,7 @@ function AccountReview({
 	return (
 		<Modal title="Check possible duplicate accounts" onClose={close}>
 			<p>
-				No transactions will import until you complete this check. A match uses
+				No account data will import until you complete this check. A match uses
 				the bank, account type, and last four digits of an account connected by
 				you or your partner.
 			</p>

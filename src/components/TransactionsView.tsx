@@ -3,8 +3,10 @@ import { Plus, Search } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
-import { cents } from "../domain/budget";
+import { parseTransactionAmounts } from "../domain/transaction-input";
+import { categoryNameError, labelError } from "../domain/validation";
 import { amount, ConfirmModal, Modal, MoneyInput, usd } from "./ui";
+import { ValidatedInput } from "./ValidatedInput";
 import type { ViewProps } from "./view-types";
 export function TransactionsView({
 	spaceId,
@@ -16,7 +18,11 @@ export function TransactionsView({
 	const [search, setSearch] = useState("");
 	const [category, setCategory] = useState("");
 	const [account, setAccount] = useState("");
-	const [cursor, setCursor] = useState<string | undefined>();
+	const [page, setPage] = useState<{ key: string; cursor?: string }>();
+	const pageKey = JSON.stringify([spaceId, month, search, category, account]);
+	const cursor = page?.key === pageKey ? page.cursor : undefined;
+	const setCursor = (cursor: string | undefined) =>
+		setPage({ key: pageKey, cursor });
 	const [editing, setEditing] = useState<
 		Doc<"transactions"> | null | undefined
 	>();
@@ -129,6 +135,12 @@ export function TransactionsView({
 											{x.source === "manual" ? "Manual" : x.kind}
 											{x.note ? ` · ${x.note}` : ""}
 										</small>
+										{!x.edited && x.classificationStatus === "pending" && (
+											<small>Classification pending</small>
+										)}
+										{!x.edited && x.classificationStatus === "review" && (
+											<span className="tag">Needs review</span>
+										)}
 									</td>
 									<td>
 										<span className="tag">
@@ -155,28 +167,35 @@ export function TransactionsView({
 				</div>
 				{!rows ? (
 					<p className="empty-state">Loading transactions…</p>
-				) : !rows.rows.length ? (
-					<p className="empty-state">No transactions match these filters.</p>
 				) : (
-					<div className="pagination">
-						<span>{rows.total} matching transactions</span>
-						<button
-							type="button"
-							className="secondary"
-							disabled={!cursor}
-							onClick={() => setCursor(undefined)}
-						>
-							First page
-						</button>
-						<button
-							type="button"
-							className="secondary"
-							disabled={!rows.next}
-							onClick={() => setCursor(rows.next ?? undefined)}
-						>
-							Next page
-						</button>
-					</div>
+					<>
+						{!rows.rows.length && (
+							<p className="empty-state">
+								{rows.next
+									? "No matches on this page. Check the next page."
+									: "No more transactions match these filters."}
+							</p>
+						)}
+						<div className="pagination">
+							<span>{rows.rows.length} transactions on this page</span>
+							<button
+								type="button"
+								className="secondary"
+								disabled={!cursor}
+								onClick={() => setCursor(undefined)}
+							>
+								First page
+							</button>
+							<button
+								type="button"
+								className="secondary"
+								disabled={!rows.next}
+								onClick={() => setCursor(rows.next ?? undefined)}
+							>
+								Next page
+							</button>
+						</div>
+					</>
 				)}
 			</section>
 			{editing !== undefined && accounts && (
@@ -214,22 +233,35 @@ function TransactionEditor({
 	const save = useMutation(api.budgets.saveTransaction);
 	const remove = useMutation(api.budgets.deleteTransaction);
 	const reconcile = useMutation(api.budgets.reconcile);
+	const funds = useQuery(api.budgets.funds, {
+		spaceId,
+		month: entry?.date.slice(0, 7) ?? month,
+	});
 	const [kind, setKind] = useState(entry?.kind ?? "purchase");
+	const [transactionAmount, setTransactionAmount] = useState(
+		entry ? amount(entry.amount) : "",
+	);
 	const [splits, setSplits] = useState(
-		entry?.splits.map((x) => ({
-			key: crypto.randomUUID(),
-			categoryId: String(x.categoryId),
-			amount: amount(x.amount),
-		})) ?? [
-			{
-				key: crypto.randomUUID(),
-				categoryId: categories[0]?._id ?? "",
-				amount: "0.00",
-			},
-		],
+		entry?.splits.length
+			? entry.splits.map((x) => ({
+					key: crypto.randomUUID(),
+					categoryId: String(x.categoryId),
+					amount: amount(x.amount),
+					fundId: x.fundId ?? "",
+				}))
+			: [
+					{
+						key: crypto.randomUUID(),
+						categoryId: categories[0]?._id ?? "",
+						amount: "0.00",
+						fundId: "",
+					},
+				],
 	);
 	const [match, setMatch] = useState("");
+	const [importCursor, setImportCursor] = useState<string | undefined>();
 	const [deleting, setDeleting] = useState(false);
+	const amounts = parseTransactionAmounts(kind, transactionAmount, splits);
 	const imports = useQuery(
 		api.budgets.transactions,
 		entry?.source === "manual"
@@ -238,11 +270,14 @@ function TransactionEditor({
 					month: entry.date.slice(0, 7),
 					accountId: entry.accountId,
 					limit: 100,
+					cursor: importCursor,
 				}
 			: "skip",
 	);
 	async function submit(e: FormEvent<HTMLFormElement>) {
 		e.preventDefault();
+		if (!amounts.data) return;
+		const { amount, splits: allocations } = amounts.data;
 		const form = new FormData(e.currentTarget);
 		if (
 			await run(() =>
@@ -251,21 +286,16 @@ function TransactionEditor({
 					...(entry ? { id: entry._id } : {}),
 					accountId: String(form.get("account")) as Id<"accounts">,
 					description: String(form.get("description")),
-					amount: cents(String(form.get("amount"))),
+					amount,
 					date: String(form.get("date")),
 					kind,
-					pending:
-						entry?.source === "plaid"
-							? entry.pending
-							: form.get("pending") === "on",
+					pending: entry?.source === "plaid" ? entry.pending : false,
 					note: String(form.get("note")),
-					splits:
-						kind === "purchase"
-							? splits.map((x) => ({
-									categoryId: x.categoryId as Id<"categories">,
-									amount: cents(x.amount),
-								}))
-							: [],
+					splits: allocations.map((split) => ({
+						amount: split.amount,
+						categoryId: split.categoryId as Id<"categories">,
+						...(split.fundId ? { fundId: split.fundId as Id<"funds"> } : {}),
+					})),
 					revision: entry?.revision ?? 0,
 				}),
 			)
@@ -278,6 +308,17 @@ function TransactionEditor({
 			onClose={onClose}
 		>
 			<form onSubmit={submit}>
+				{!entry?.edited && entry?.classificationStatus === "review" && (
+					<p className="banner">
+						Needs review. Check the type and category, then save.
+					</p>
+				)}
+				{!entry?.edited && entry?.classificationStatus === "pending" && (
+					<p className="banner">
+						Classification is pending. Totals can change when it finishes. You
+						can set the type and category now.
+					</p>
+				)}
 				<fieldset disabled={!active}>
 					<label>
 						Account
@@ -302,9 +343,12 @@ function TransactionEditor({
 					{!accounts.some((x) => x.active) && !entry && (
 						<p>Connect a bank in Accounts & settings first.</p>
 					)}
-					<label>
+					<label htmlFor="transactionsview-description">
 						Description
-						<input
+						<ValidatedInput
+							id="transactionsview-description"
+							aria-label="Description"
+							validate={(value) => labelError(value, 200)}
 							name="description"
 							defaultValue={entry?.description}
 							required
@@ -313,8 +357,10 @@ function TransactionEditor({
 					</label>
 					<MoneyInput
 						name="amount"
+						allowNegative
 						value={entry?.amount}
 						readOnly={entry?.source === "plaid"}
+						onChange={setTransactionAmount}
 						label="Amount (positive for outflow; negative for income or refund)"
 					/>
 					<label>
@@ -322,6 +368,8 @@ function TransactionEditor({
 						<input
 							name="date"
 							type="date"
+							min="0001-01-01"
+							max="9999-12-31"
 							defaultValue={entry?.date ?? `${month}-01`}
 							required
 							readOnly={entry?.source === "plaid"}
@@ -348,7 +396,7 @@ function TransactionEditor({
 						<section>
 							<h3>Category splits</h3>
 							{splits.map((s, i) => (
-								<div className="split-row" key={s.key}>
+								<div className="split-row funded-split-row" key={s.key}>
 									<label>
 										<span className="sr-only">Category for split {i + 1}</span>
 										<select
@@ -372,7 +420,8 @@ function TransactionEditor({
 									<label>
 										<span className="sr-only">Amount for split {i + 1}</span>
 										<input
-											value={s.amount}
+											value={splits.length === 1 ? transactionAmount : s.amount}
+											readOnly={splits.length === 1}
 											inputMode="decimal"
 											required
 											onChange={(e) =>
@@ -383,6 +432,29 @@ function TransactionEditor({
 												)
 											}
 										/>
+									</label>
+									<label className="split-fund">
+										<span>Pay from fund for split {i + 1}</span>
+										<select
+											value={s.fundId}
+											aria-label={`Pay from fund for split ${i + 1}`}
+											onChange={(event) =>
+												setSplits(
+													splits.map((row, index) =>
+														index === i
+															? { ...row, fundId: event.target.value }
+															: row,
+													),
+												)
+											}
+										>
+											<option value="">Use monthly category budget</option>
+											{funds?.items.map((fund) => (
+												<option key={fund._id} value={fund._id}>
+													{fund.name}
+												</option>
+											))}
+										</select>
 									</label>
 									<button
 										type="button"
@@ -400,11 +472,16 @@ function TransactionEditor({
 								className="secondary"
 								onClick={() =>
 									setSplits([
-										...splits,
+										...splits.map((s) => ({
+											...s,
+											amount:
+												splits.length === 1 ? transactionAmount : s.amount,
+										})),
 										{
 											key: crypto.randomUUID(),
 											categoryId: categories[0]?._id ?? "",
 											amount: "0.00",
+											fundId: "",
 										},
 									])
 								}
@@ -412,27 +489,32 @@ function TransactionEditor({
 								Add split
 							</button>
 							<p className="muted">
-								Split amounts must total the transaction amount, including its
-								sign.
+								{splits.length === 1
+									? "A single category uses the full transaction amount."
+									: "Split amounts must total the transaction amount, including its sign."}
 							</p>
+							{splits.some((split) => split.fundId) && (
+								<p className="muted">
+									Fund payments reduce the fund’s reserved balance. Refunds add
+									money back. Posted amounts still count in spending reports,
+									but do not use the regular category limit.
+								</p>
+							)}
 						</section>
 					)}
 					<label>
 						Note
 						<textarea name="note" maxLength={2000} defaultValue={entry?.note} />
 					</label>
-					{entry?.source !== "plaid" && (
-						<label className="checkbox">
-							<input
-								name="pending"
-								type="checkbox"
-								defaultChecked={entry?.pending}
-							/>
-							Pending
-						</label>
+					{transactionAmount && amounts.error && (
+						<p className="over" role="alert">
+							{amounts.error}
+						</p>
 					)}
 					<div className="button-row">
-						<button type="submit">Save transaction</button>
+						<button type="submit" disabled={!amounts.data}>
+							Save transaction
+						</button>
 						{entry?.source === "manual" && (
 							<button
 								type="button"
@@ -467,6 +549,30 @@ function TransactionEditor({
 								))}
 						</select>
 					</label>
+					<div className="button-row">
+						<button
+							type="button"
+							className="secondary"
+							disabled={!importCursor}
+							onClick={() => {
+								setImportCursor(undefined);
+								setMatch("");
+							}}
+						>
+							First page of imports
+						</button>
+						<button
+							type="button"
+							className="secondary"
+							disabled={!imports?.next}
+							onClick={() => {
+								setImportCursor(imports?.next ?? undefined);
+								setMatch("");
+							}}
+						>
+							Next page of imports
+						</button>
+					</div>
 					<button
 						type="button"
 						className="secondary"
@@ -559,9 +665,14 @@ function CategoryEditor({
 					if (saved) onClose();
 				}}
 			>
-				<label>
+				<label htmlFor="transactionsview-name">
 					Name
-					<input
+					<ValidatedInput
+						id="transactionsview-name"
+						aria-label="Name"
+						validate={(value) =>
+							categoryNameError(value, categories, current?._id)
+						}
 						name="name"
 						defaultValue={current?.name ?? ""}
 						required

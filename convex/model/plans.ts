@@ -11,6 +11,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { access } from "../access";
 import { funding, results } from "./accounting";
+import { summary as fundSummary, sameAllocations } from "./funds";
 import { sharedForPersonal } from "./personalFunding";
 
 type MonthArgs = { spaceId: Id<"spaces">; month: string };
@@ -22,6 +23,7 @@ export async function save(
 		savingsTarget: number;
 		limits: Doc<"plans">["limits"];
 		revision: number;
+		fundSignature?: string;
 	},
 ) {
 	const { space } = await access(ctx, args.spaceId, true);
@@ -41,11 +43,20 @@ export async function save(
 		.unique();
 	assertRevision(old?.revision ?? 0, args.revision);
 	for (const limit of args.limits) {
+		if (limit.fundId)
+			throw new ConvexError(
+				"Set fund amounts in Funds, not in spending limits.",
+			);
 		const category = await ctx.db.get(limit.categoryId);
 		if (category?.spaceId !== args.spaceId)
 			throw new ConvexError("Every category must belong to this budget.");
 	}
 	const funds = await funding(ctx, args.spaceId, args.month);
+	const fundPlan = await fundSummary(ctx, args);
+	if (fundPlan.items.length && args.fundSignature !== fundPlan.signature)
+		throw new ConvexError(
+			"Fund amounts changed. Check the Funds row, then save the budget again.",
+		);
 	for (const source of new Set(funds.allocations.map((x) => x.sourceMonth))) {
 		const sourceResult = await results(ctx, args.spaceId, source);
 		const sourcePlan = await ctx.db
@@ -62,10 +73,13 @@ export async function save(
 			.collect();
 		if (
 			allocated.reduce((sum, x) => sum + x.amount, 0) >
-			Math.max(0, sourceResult.savings - (sourcePlan?.savingsTarget ?? 0))
+			Math.max(
+				0,
+				sourceResult.unreservedSavings - (sourcePlan?.savingsTarget ?? 0),
+			)
 		)
 			throw new ConvexError(
-				`Carry-forward from ${source} is invalid. Reopen its review.`,
+				`Carry-forward from ${source} is invalid. Check that month’s transactions and savings target.`,
 			);
 	}
 	const balance = planBalance(
@@ -73,6 +87,7 @@ export async function save(
 		funds.incoming,
 		funds.outgoing,
 		funds.carry,
+		fundPlan.total,
 	);
 	if (balance !== 0)
 		throw new ConvexError(
@@ -84,6 +99,7 @@ export async function save(
 		expectedIncome: args.expectedIncome,
 		savingsTarget: args.savingsTarget,
 		limits: args.limits,
+		fundAllocations: fundPlan.allocations,
 		saved: true,
 		reviewed: false,
 		revision: (old?.revision ?? 0) + 1,
@@ -150,11 +166,15 @@ export async function review(
 		);
 	assertRevision(plan.revision, args.revision);
 	const result = await results(ctx, args.spaceId, args.month);
+	if (!sameAllocations(plan.fundAllocations, result.fundPlan.allocations))
+		throw new ConvexError(
+			"Fund amounts changed. Save this month's budget before completing its review.",
+		);
 	const amount = args.allocations.reduce(
 		(s, x) => s + money(x.amount, true),
 		0,
 	);
-	if (amount > Math.max(0, result.savings - plan.savingsTarget))
+	if (amount > Math.max(0, result.unreservedSavings - plan.savingsTarget))
 		throw new ConvexError(
 			"Carry-forward exceeds this month’s savings above target.",
 		);

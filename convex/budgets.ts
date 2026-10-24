@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
 import * as categoriesModel from "./model/categories";
+import * as fundsModel from "./model/funds";
 import * as insightsModel from "./model/insights";
 import * as plansModel from "./model/plans";
 import * as reportingModel from "./model/reporting";
@@ -60,8 +61,31 @@ export const savePlan = mutation({
 		savingsTarget: v.number(),
 		limits: v.array(split),
 		revision: v.number(),
+		fundSignature: v.optional(v.string()),
 	},
 	handler: plansModel.save,
+});
+
+export const funds = query({
+	args: { spaceId: v.id("spaces"), month: v.string() },
+	handler: fundsModel.summary,
+});
+
+export const saveFund = mutation({
+	args: {
+		spaceId: v.id("spaces"),
+		id: v.optional(v.id("funds")),
+		startMonth: v.string(),
+		openingBalance: v.number(),
+		name: v.string(),
+		targetAmount: v.number(),
+		targetMonth: v.optional(v.string()),
+		intervalMonths: v.optional(v.number()),
+		monthlyAmount: v.optional(v.number()),
+		effectiveMonth: v.string(),
+		revision: v.number(),
+	},
+	handler: fundsModel.save,
 });
 
 export const repeatPlan = mutation({

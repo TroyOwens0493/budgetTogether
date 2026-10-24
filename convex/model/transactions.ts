@@ -9,6 +9,7 @@ import {
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { access, label, readCutoff } from "../access";
+import { validatePayments } from "./funds";
 
 export async function list(
 	ctx: QueryCtx,
@@ -24,7 +25,8 @@ export async function list(
 ) {
 	const cutoff = await readCutoff(ctx, args.spaceId);
 	month(args.month);
-	const rows = await ctx.db
+	const size = Math.max(1, Math.min(100, Math.floor(args.limit ?? 30)));
+	const result = await ctx.db
 		.query("transactions")
 		.withIndex("by_space_date", (q) =>
 			q
@@ -33,8 +35,14 @@ export async function list(
 				.lt("date", `${nextMonth(args.month)}-01`),
 		)
 		.order("desc")
-		.collect();
-	const matches = rows.filter(
+		.paginate({
+			cursor: args.cursor ?? null,
+			numItems: size,
+			maximumRowsRead: size,
+			maximumBytesRead: 512_000,
+		});
+	// Filter only this bounded index block. Sparse matches can produce empty pages.
+	const matches = result.page.filter(
 		(x) =>
 			x._creationTime <= cutoff &&
 			!x.removed &&
@@ -46,15 +54,9 @@ export async function list(
 				x.splits.some((s) => s.categoryId === args.categoryId)) &&
 			(!args.accountId || x.accountId === args.accountId),
 	);
-	const offset = args.cursor
-		? matches.findIndex((x) => x._id === args.cursor) + 1
-		: 0;
-	const size = Math.max(1, Math.min(100, args.limit ?? 30));
-	const page = matches.slice(offset, offset + size);
 	return {
-		rows: page,
-		next: offset + size < matches.length ? page.at(-1)?._id : null,
-		total: matches.length,
+		rows: matches,
+		next: result.isDone ? null : result.continueCursor,
 	};
 }
 
@@ -84,6 +86,7 @@ export async function save(
 	)
 		throw new ConvexError("Choose an account in this budget.");
 	if (args.id && !old) throw new ConvexError("Transaction not found.");
+	const pending = old?.source === "plaid" && args.pending;
 	assertRevision(old?.revision ?? 0, args.revision);
 	money(args.amount);
 	if (
@@ -94,6 +97,7 @@ export async function save(
 		throw new ConvexError("Enter a valid date.");
 	if (args.kind === "purchase") {
 		validateSplits(args.amount, args.splits);
+		await validatePayments(ctx, args.spaceId, args.date, args.splits);
 		for (const s of args.splits)
 			if ((await ctx.db.get(s.categoryId))?.spaceId !== args.spaceId)
 				throw new ConvexError("Choose categories from this budget.");
@@ -118,7 +122,7 @@ export async function save(
 		(args.kind !== "transfer" ||
 			old?.amount !== args.amount ||
 			old?.date !== args.date ||
-			old?.pending !== args.pending)
+			old?.pending !== pending)
 	)
 		throw new ConvexError(
 			"Remove the contribution match before changing its classification.",
@@ -130,9 +134,17 @@ export async function save(
 		amount: args.amount,
 		date: args.date,
 		kind: args.kind,
-		pending: args.pending,
+		pending,
 		note: args.note,
 		splits: args.splits,
+		funded: args.splits.some((split) => Boolean(split.fundId)),
+		...(old?.source === "plaid"
+			? {
+					classificationStatus: "manual" as const,
+					classificationRetryAt: undefined,
+					classificationError: undefined,
+				}
+			: {}),
 		revision: (old?.revision ?? 0) + 1,
 		edited: true,
 	};
@@ -186,6 +198,7 @@ export async function reconcile(
 		);
 	await access(ctx, manual.spaceId, true);
 	assertRevision(manual.revision, args.revision);
+	await validatePayments(ctx, manual.spaceId, imported.date, manual.splits);
 	if (
 		(await linkedContribution(ctx, manual._id)) ||
 		(await linkedContribution(ctx, imported._id))
@@ -195,7 +208,11 @@ export async function reconcile(
 		kind: manual.kind,
 		note: manual.note,
 		splits: manual.splits,
+		funded: manual.splits.some((split) => Boolean(split.fundId)),
 		edited: true,
+		classificationStatus: "manual",
+		classificationRetryAt: undefined,
+		classificationError: undefined,
 		revision: imported.revision + 1,
 	});
 	await ctx.db.patch(manual._id, {

@@ -77,7 +77,7 @@ function AllocationRow({
 				className="inline-form"
 				onSubmit={async (event) => {
 					event.preventDefault();
-					if (saving) return;
+					if (saving || person.revision > snapshot.revision) return;
 					const form = new FormData(event.currentTarget);
 					setSaving(true);
 					let amount = snapshot.amount;
@@ -102,7 +102,9 @@ function AllocationRow({
 						value={snapshot.amount}
 						label={`${person.name}'s personal amount`}
 					/>
-					<button type="submit">Save amount</button>
+					<button type="submit" disabled={person.revision > snapshot.revision}>
+						Save amount
+					</button>
 				</fieldset>
 			</form>
 		</>

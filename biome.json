@@ -8,14 +8,17 @@
 	"files": {
 		"ignoreUnknown": false,
 		"includes": [
-			"**/src/**/*",
-			"**/.vscode/**/*",
-			"**/index.html",
-			"**/vite.config.ts",
-			"!**/src/routeTree.gen.ts",
-			"**/convex/**/*",
-			"!**/convex/_generated",
-			"**/tests/**/*"
+			"src/**",
+			".vscode/**",
+			"index.html",
+			"*.config.ts",
+			"e2e/**",
+			"convex/**",
+			"tests/**",
+			"!playwright-report",
+			"!test-results",
+			"!src/routeTree.gen.ts",
+			"!convex/_generated"
 		]
 	},
 	"formatter": {

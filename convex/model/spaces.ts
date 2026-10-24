@@ -1,4 +1,5 @@
 import { ConvexError } from "convex/values";
+import { timeZoneError } from "../../src/domain/validation";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { label, user } from "../access";
 
@@ -7,11 +8,8 @@ export async function setup(
 	args: { name: string; timeZone: string },
 ) {
 	const current = await user(ctx);
-	try {
-		new Intl.DateTimeFormat("en", { timeZone: args.timeZone });
-	} catch {
-		throw new ConvexError("Choose a valid time zone.");
-	}
+	const error = timeZoneError(args.timeZone);
+	if (error) throw new ConvexError(error);
 	const existing = await ctx.db
 		.query("profiles")
 		.withIndex("by_user", (q) => q.eq("userId", current._id))

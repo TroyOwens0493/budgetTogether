@@ -2,6 +2,7 @@ import { nextMonth, totals } from "../../src/domain/budget";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { access, readCutoff } from "../access";
+import { summary as fundSummary } from "./funds";
 import { recipients, sharedForPersonal } from "./personalFunding";
 
 export async function funding(
@@ -161,8 +162,26 @@ export async function results(
 		}
 	}
 	const result = totals(counted, funds.actualIncoming, funds.actualOutgoing);
+	const fundPlan = await fundSummary(ctx, { spaceId, month: m });
+	const categories = { ...result.categories };
+	let fundSpending = 0;
+	for (const entry of counted) {
+		if (entry.removed || entry.pending || entry.kind !== "purchase") continue;
+		for (const split of entry.splits) {
+			if (!split.fundId) continue;
+			fundSpending += split.amount;
+			categories[split.categoryId] =
+				(categories[split.categoryId] ?? 0) - split.amount;
+		}
+	}
 	return {
 		...result,
+		categories,
+		spendingCategories: result.categories,
+		fundPlan,
+		fundSpending,
+		unreservedSavings:
+			result.savings + householdIncome - fundPlan.reservedChange,
 		income: result.income + householdIncome,
 		savings: result.savings + householdIncome,
 		fundedBy,

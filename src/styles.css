@@ -641,53 +641,14 @@ dd {
 	color: var(--muted);
 	font-size: 12px;
 }
-.review-totals {
-	display: flex;
-	justify-content: space-between;
-	border-bottom: 1px solid var(--border);
-	padding: 6px 0 26px;
-	margin-bottom: 24px;
-}
-.review-totals > div {
-	display: flex;
-	flex-direction: column;
-	gap: 10px;
-}
-.review-totals span {
-	font-size: 11px;
-	color: var(--muted);
-	text-transform: uppercase;
-	letter-spacing: 1px;
-}
-.review-totals strong {
-	font-size: 30px;
-}
-.review-totals > div:last-child {
-	text-align: right;
-}
-.carry-row,
 .split-row {
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) 125px 34px;
 	gap: 14px;
 	align-items: center;
 }
-.carry-row button,
 .split-row button {
 	margin-top: 10px;
-}
-.retained {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 20px;
-	background: #f0f4e8;
-	padding: 22px;
-	border-radius: 8px;
-	margin: 24px 0;
-}
-.retained small {
-	margin-top: 6px;
 }
 .money-input {
 	display: flex;
@@ -702,6 +663,40 @@ dd {
 }
 .money-input input {
 	border: 0;
+}
+.validated-input {
+	display: grid;
+	gap: 6px;
+	min-width: 0;
+	width: 100%;
+}
+.validated-input small {
+	color: #91412c;
+	font-weight: 400;
+	line-height: 1.4;
+}
+.validated-input input[aria-invalid="true"] {
+	border-color: #91412c;
+}
+.allocation-row > .validated-input {
+	width: min(135px, 50%);
+	flex-shrink: 0;
+}
+.allocation-row .validated-input input {
+	width: 100%;
+}
+.money-input {
+	align-items: flex-start;
+}
+.money-input > span:first-child {
+	padding-top: 11px;
+}
+.money-input > .validated-input {
+	padding: 0;
+	color: inherit;
+}
+.money-input .validated-input small {
+	padding: 0 12px 8px;
 }
 .narrow {
 	max-width: 680px;
@@ -825,6 +820,7 @@ dialog {
 }
 dialog::backdrop {
 	background: #1c302e66;
+	backdrop-filter: blur(6px);
 }
 .modal-heading {
 	display: flex;
@@ -1041,15 +1037,9 @@ dialog::backdrop {
 		padding: 14px;
 		font-size: 12px;
 	}
-	.carry-row,
 	.split-row {
 		grid-template-columns: minmax(0, 1fr) 90px 26px;
 		gap: 8px;
-	}
-	.carry-row input,
-	.carry-row select {
-		padding: 9px;
-		font-size: 12px;
 	}
 	.auth-shell {
 		display: block;
@@ -1076,15 +1066,240 @@ dialog::backdrop {
 		flex-wrap: wrap;
 		font-size: 11px;
 	}
-	.review-totals strong {
-		font-size: 26px;
-	}
 	.account-row {
 		flex-wrap: wrap;
 	}
 }
+.funds-heading {
+	margin-bottom: 24px;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+.funds-heading h1 {
+	margin: 0 0 8px;
+	font-size: 30px;
+}
+.funds-heading p {
+	margin: 0;
+}
+.funds-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+	gap: 20px;
+}
+.fund-card h2 {
+	margin: 8px 0 0;
+	overflow-wrap: anywhere;
+}
+.fund-card .section-heading {
+	align-items: flex-start;
+	gap: 16px;
+}
+.fund-monthly {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 24px 0;
+}
+.fund-monthly strong {
+	font-size: 30px;
+	font-weight: 500;
+}
+.fund-monthly span,
+.fund-details dt,
+.fund-budget-row small {
+	color: var(--muted);
+	font-size: 12px;
+}
+.fund-details {
+	margin: 0;
+}
+.fund-details > div,
+.fund-budget-detail,
+.fund-overview-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 0;
+}
+.fund-details dd {
+	margin: 0;
+}
+.fund-budget-row {
+	padding-bottom: 20px;
+}
+.fund-budget-detail {
+	font-size: 12px;
+	padding: 6px 0;
+}
+.fund-budget-row input[readonly] {
+	background: #f6f7f3;
+	font-weight: 600;
+}
+.fund-overview-row {
+	flex-direction: column;
+	border-top: 1px solid var(--border);
+	margin-top: 16px;
+}
+.fund-overview-row span {
+	font-size: 12px;
+}
+.funds-empty svg {
+	margin: 8px auto 16px;
+}
+.funded-split-row .split-fund {
+	grid-column: 1 / -1;
+	grid-row: 2;
+}
+.funded-split-row .split-fund > span {
+	font-size: 12px;
+}
+.funded-split-row {
+	padding: 12px 0;
+	border-bottom: 1px solid var(--border);
+}
 @media (prefers-reduced-motion: reduce) {
 	* {
 		scroll-behavior: auto !important;
+	}
+}
+
+.projection-heading {
+	font-size: 28px;
+	margin: 0 0 4px;
+}
+.page-actions:has(.projection-heading) p {
+	margin: 0;
+	color: var(--muted);
+}
+.projection-funding {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 24px;
+}
+.projection-funding > div {
+	display: grid;
+	gap: 5px;
+	flex: 1;
+	min-width: 130px;
+}
+.projection-funding strong {
+	font-size: 23px;
+}
+.projection-funding small,
+.projection-funding .eyebrow {
+	color: var(--muted);
+}
+.projection-value {
+	display: block;
+	font-size: clamp(24px, 3vw, 36px);
+	margin-bottom: 16px;
+}
+.projection-chart svg {
+	display: block;
+	width: 100%;
+	min-width: 0;
+	height: auto;
+}
+.projection-chart svg text {
+	font-size: 11px;
+	fill: var(--muted);
+}
+.projection-chart .section-heading {
+	gap: 12px;
+	flex-wrap: wrap;
+}
+.projection-chart .section-heading span {
+	color: var(--muted);
+	font-size: 12px;
+}
+.projection-gridline {
+	stroke: var(--border);
+}
+.projection-line {
+	stroke: #477c52;
+}
+.projection-investments .projection-line {
+	stroke: #5475ad;
+}
+.projection-dot {
+	fill: #477c52;
+}
+.projection-investments .projection-dot {
+	fill: #5475ad;
+}
+.projection-marker {
+	stroke: #94a396;
+	stroke-dasharray: 3 4;
+}
+.projection-chart input[type="range"] {
+	padding: 0;
+	border: 0;
+	accent-color: #477c52;
+}
+.projection-account {
+	border-top: 1px solid var(--border);
+	margin-top: 20px;
+	padding-top: 12px;
+}
+.projection-account .checkbox span {
+	min-width: 0;
+}
+.projection-holding {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 16px;
+	padding: 16px 0 16px 28px;
+	border-top: 1px solid var(--border);
+}
+.projection-holding > div:first-child {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+.projection-holding small {
+	display: block;
+	margin-top: 5px;
+	color: var(--muted);
+}
+.projection-holding small.over {
+	color: #a33c30;
+}
+.projection-notes summary {
+	cursor: pointer;
+	font-weight: 600;
+}
+.projection-notes p,
+.projection-notes li {
+	color: var(--muted);
+	line-height: 1.6;
+}
+.table-scroll {
+	overflow-x: auto;
+}
+.text-button {
+	background: transparent;
+	color: var(--green);
+	padding: 0;
+	text-decoration: underline;
+}
+@media (max-width: 760px) {
+	.projection-holding {
+		padding-left: 0;
+		flex-wrap: wrap;
+	}
+	.projection-funding {
+		gap: 18px;
+	}
+	.projection-funding > div:first-child {
+		flex-basis: 100%;
+	}
+	.projection-heading {
+		font-size: 25px;
+	}
+	.projection-account .account-row {
+		gap: 12px;
 	}
 }

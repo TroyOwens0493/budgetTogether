@@ -11,16 +11,14 @@ Use Node 24 or later and the pnpm version specified in package.json.
 ```sh
 pnpm install
 cp .env.example .env.local
-pnpm exec convex dev
+pnpm dev
 ```
 
-Sign in to the existing Convex **development** project. Keep `convex dev` running to generate types and sync backend changes. Set `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` in `.env.local` to the development deployment's `.cloud` and `.site` addresses. Do not use a production deployment for this branch.
+On the first run, sign in to the existing Convex **development** project. Set `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` in `.env.local` to the development deployment's `.cloud` and `.site` addresses. Do not use a production deployment for this branch.
 
 Set the variables described in `.env.example` on that Convex development deployment. `SITE_URL` is the app origin, usually `http://localhost:3000`. Generate a random Better Auth secret and a base64 key containing 32 random bytes for Plaid token encryption. Keep secrets in deployment environment variables. Browser variables start with `VITE_` and must not contain secrets.
 
-```sh
-pnpm dev
-```
+`pnpm dev` generates backend types and syncs the Convex development deployment before starting the web server. Keep it running to watch and update both the backend and the web app. Ctrl+C stops both processes. No separate `convex dev` terminal is needed.
 
 Open http://localhost:3000. Local authentication also accepts http://127.0.0.1:3000 and http://[::1]:3000 on the same port. Create an account and private budget. Connect a bank, add a monthly plan, and optionally create a shared budget and invite a partner.
 
@@ -53,15 +51,41 @@ The bank event endpoint is `https://<development-deployment>.convex.site/bank-ev
 
 Resend sends partner invitations and password reset emails. Configure a verified sender domain and `RESEND_FROM`. Invitation delivery status appears in account settings; a failed invitation can be revoked and replaced. Invitations expire after seven days, require the recipient's email address, and become membership only after acceptance. Reset links use Better Auth's expiration and single-use token handling.
 
+## Transaction classification
+
+TypeSafe Jev chooses the transaction type (purchase/refund, income, or transfer) and a category from that transaction's budget. Plaid supplies bank records; its categories are not used. The HTTP client calls `https://api.typesafe.ai/v1/systemone` with the fixed `jev-1.14.0` model and no added SDK package. Set `JEV_SECRET` on the Convex development deployment. A local `.env.local` value alone does not configure Convex. To enter the key without putting it in shell history, run `pnpm exec convex env set JEV_SECRET` and enter it at the private prompt.
+
+Each import queues classification after the bank record commits. New records start as uncategorized purchases. Existing records keep their last type and category while waiting. The app shows that totals can change while classification is pending or needs review. Failures retain the bank import and retry after 30 seconds, doubling the delay up to six hours. A one-minute lease and watchdog recover interrupted jobs. The five-minute recovery job also finds legacy imports in indexed batches of 50, including retained history from disconnected banks.
+
+Jev receives only the bank description, merchant when available, amount in cents, date, pending status, account type, currency, and the category names for that budget. It does not receive bank credentials, account identifiers, user identifiers, private notes, other budgets' categories, or Plaid's classification. Legacy imports use their saved description when the original bank description is unavailable. Each answer records the model version and confidence. Income and transfers have no category splits; refunds remain purchases with negative spending.
+
+The app applies Jev's best answer and marks it **Needs review** if type confidence is below 0.8, purchase category confidence is below 0.8, or no purchase category fits. Open the transaction, check its type and category, and save to clear the flag. Manual changes, splits, reconciliation, and confirmed contribution matches take priority over Jev and future bank updates. A result is discarded if the transaction changes during the request. Category changes during a request cause a fresh classification. The client supports up to 254 budget categories plus an uncategorized option; a larger category list stays pending with a configuration error instead of silently omitting categories.
+
+`convex/jevClient.ts` owns the TypeSafe request and response format. `convex/model/transactionClassification.ts` owns scheduling state, retries, stale-result checks, and applying decisions. `convex/classification.ts` registers the small internal API. To start legacy classification immediately after syncing the backend, run `pnpm exec convex run classification:poll '{}'`. The recovery job also starts it automatically.
+
 ## Agreed product choices
 
 - Shared budgets are called **Shared**. Users do not choose a name. Existing shared budgets also appear as **Shared**.
 - Bank accounts start private. Account moves apply to transactions dated from the move date onward. Previously imported records stay in their original budget; earlier private history is never shared.
-- A departing partner's accounts return to their private budget. The remaining partner keeps the shared budget active. The departing partner can read records shared before the departure and cannot edit that budget or read later transactions.
+- Leaving permanently deletes the shared budget and its records for both people, overriding history retention in the PDF. Both partners' shared accounts return to their own private budgets. Private records and bank connections remain. Old bank imports from deleted shared periods are ignored. Only bank transaction identifiers are retained to prevent deleted entries and pending replacements from being imported again; no budget or transaction content is kept in these markers. Large transaction histories are deleted in background batches after access is removed.
 - **Shared budgets fund personal budgets**, overriding the contribution direction in the PDF. All planned income goes into the shared monthly plan. Each partner receives a monthly personal allocation from that plan. The allocation reduces shared funding and adds the same amount to personal funding at once; no bank transfer is needed. Both partners can see and edit the amounts, while personal categories, spending, and transactions stay private. Income recorded in a member's personal accounts counts in shared income totals without exposing private entries. This rule starts in the month the member joins; earlier months retain their prior accounting. Existing contribution records stay readable for historical totals.
 - **Exclusion was removed at the user's request**, overriding that feature in the PDF. Duplicate manual entries can be reconciled with bank imports instead.
 - **Draft and activation steps were removed at the user's request**, overriding those steps in the PDF. Users finish a monthly budget and choose **Save budget**. Every save requires a zero balance. A personal allocation change requires both affected budgets to be balanced and saved again.
-- New months start with prior limits for the user to check and save. Monthly review explicitly adds carry-forward to next month's categories or savings target. Repeated reviews replace existing reservations and adjust the destination budget by the difference, including an already saved budget; they do not change historical savings results. Existing records with the former draft/active field stay readable and move to the new saved field when updated.
+- New months start with prior limits for the user to check and save. Existing records with the former draft/active field stay readable and move to the new saved field when updated.
+- **Category overspending appears as a red notice in Monthly budget.** Notices have an X button and no automatic timeout. Dismissing a notice marks that alert as read for the current user and month; each partner has a separate read status.
+- **The Monthly review page was removed at the user's request**, overriding that screen in the PDF. The app no longer provides a screen for assigning leftovers to next month. Existing carry-forward records and backend calculations remain supported so saved budgets and historical results stay intact.
+
+## Funds
+
+The **Funds** tab plans repeating payments and one-time savings goals. A repeating payment has an amount, a next payment month, and a frequency of 2 to 120 months. A savings goal has a target amount and either a target month or a monthly amount. Each fund can start with money already saved. That opening balance and the start month stay fixed after creation. Fund settings can change from a selected month without changing earlier months. Pause controls are not included.
+
+The monthly budget has one automatic, read-only **Funds** row when funds exist. Its amount is the sum of the contributions needed that month. Calculations include the target month, use saved contributions from earlier months, and round up to whole cents. For example, an empty $600 fund due in three months needs $200 per month. A later six-month cycle needs $100 per month. A missed budget increases the amount needed in the remaining months. A one-time goal stops requiring contributions when it is funded.
+
+Saving a balanced monthly budget reserves each fund's contribution. Saving the same month again replaces its reservations; it does not add them twice. Copying a budget does not reserve money in the next month until that budget is saved. These are budget reservations, not bank deposits or proof of account balances. The app does not move money. Expected income, category limits, the general savings target, fund reservations, and other budget funding must balance together.
+
+Select a fund for a purchase or refund split in **Transactions**. Posted purchases reduce the fund balance, and refunds restore it. Pending imports stay separate. Actual spending reports still include the payment and its category, while the regular category's budget balance excludes the funded part. Fund reservations cannot also be assigned as carry-forward. Bank corrections and reconciliation retain fund links. A negative fund balance is shown without blocking the bank import. Changes in a prior budget or fund settings can require later budgets to be balanced and saved again.
+
+`src/domain/funds.ts` owns the shared monthly calculation. `convex/model/funds.ts` owns access, effective-month settings, and fund summaries. Saved plans store their fund allocations. A separate transaction index reads only entries with fund links when calculating balances. Funds and saved-plan history are still read in full for a budget space and need separate scaling work before large production workloads.
 
 ## API and modules
 
@@ -73,6 +97,7 @@ The PDF's API paths describe conceptual operations. This implementation uses aut
 | --- | --- |
 | `spaces.ts` | Profile setup, private-budget creation, and the user's budget list |
 | `categories.ts` | Category lists, edits, and deletion with reassignment |
+| `funds.ts` | Fund settings, monthly requirements, reserved balances, and transaction-link validation |
 | `accounting.ts` | Planned and actual funding, carry-forward funding, and monthly results |
 | `plans.ts` | Monthly plan saves, repetition, initial creation, and reviews |
 | `transactions.ts` | Transaction search, edits, deletion, splits, and reconciliation |
@@ -107,13 +132,36 @@ pnpm build
 
 Tests use Node's built-in test runner. Accounting tests cover cents, balance, refunds, transfers, pending entries, splits, carry-forward, and recurring estimates. Backend tests exercise the actual query/mutation handlers against an in-memory database with stubbed authentication. They check direct private access, stale edits, repeated reviews, account moves, departure cutoffs, contribution matches, and import idempotency. They do not replace live Convex, Plaid, or Resend integration tests.
 
+## Browser tests and Playwright MCP
+
+Playwright Test and Microsoft's Playwright MCP are development dependencies with pinned versions. Install their Chromium browsers after installing dependencies:
+
+```sh
+pnpm playwright:install
+pnpm test:e2e
+```
+
+The tests use http://localhost:3000. They reuse a running development server or start `pnpm dev` when needed. Configure `.env.local` as described above before running them. CI requires a free port 3000 and starts its own server. On a supported Linux CI image, install system dependencies with `pnpm exec playwright install-deps chromium`.
+
+The initial tests check the sign-in, registration, and password-reset screens without creating accounts or sending email. They require the configured Convex development deployment to be available. Node unit tests remain under `pnpm test`.
+
+Use `pnpm test:e2e:ui` for the test UI and `pnpm test:e2e:report` for the HTML report. To test an existing server at another address, run `PLAYWRIGHT_BASE_URL=http://localhost:3001 pnpm test:e2e`. This skips automatic server startup. Reports, failure screenshots, and traces are ignored by Git.
+
+Run isolated authenticated task tests with `pnpm exec playwright test --config e2e/tasks.config.ts`. These use the real budget UI and backend handlers with local test sessions and an in-memory database. They require no deployed services. See [the browser test guide](e2e/README.md) for setup, coverage, and limits.
+
+The project configuration at `.codex/config.toml` registers the `playwright` MCP server for Codex. It uses the local package and runs Chromium without a visible window. MCP output goes in `.playwright-mcp/`, which is ignored by Git. Start a new Codex session in this project after setup so it can load the server. Check the configuration with `codex mcp get playwright`. See the [Playwright MCP documentation](https://github.com/microsoft/playwright-mcp) and [official OpenAI MCP documentation](https://developers.openai.com/codex/mcp).
+
 ## Current verification limits
 
-The backend has been deployed to the configured Convex development deployment, and its API declarations have been regenerated. Budget edits have been tested in the authenticated UI, including repeated saves and persistence after a page reload. Keep `pnpm exec convex dev` running with `pnpm dev` so backend requests stay in sync with the UI. To sync the backend once, run `pnpm exec convex dev --once`. Registration, reset emails, partner emails, Plaid Link/imports, and two-browser collaboration still need live integration testing.
+The backend, including bank-sync tables, indexes, and Jev classification, is synced to the configured Convex development deployment. Jev was tested with a synthetic purchase and classified all 178 existing bank transactions; 37 required review and none failed. Isolated browser tests cover budget saves, persistence after reload, personal funding, classification review, and edits from two sessions using real UI and backend handlers with an in-memory database. Keep `pnpm dev` running so backend requests stay in sync with the UI. To sync the backend once, run `pnpm exec convex dev --once`. Registration, reset emails, partner emails, Plaid Link/imports, and live two-browser collaboration still need integration testing.
 
 Persistent Plaid account identifiers prevent duplicate connections where Plaid provides them. When no persistent ID is available, a match on bank, account type, and last four digits pauses the new connection. The user must identify it as the same account (keep the existing import) or a different account (import it). This check includes the current partner's accounts without returning their private account details. Imports, webhooks, and scheduled sync cannot bypass a pending review.
 
-Transaction pages return a bounded page, but their backend filtering currently reads the selected month's records. Very large monthly histories and initial Plaid import batches will need bounded server queries and chunked sync staging before production use. Recurring suggestions estimate monthly charges from three similar posted entries; estimates are not bill reminders. This branch is not configured for Plaid Production.
+Transaction queries read at most 100 indexed monthly records per page (30 by default), with a 512 KB read limit. They filter that block and return an opaque continuation cursor, without a full match count. Sparse filters can return an empty page with more pages available. Both the transaction table and the reconciliation picker allow continuation.
+
+Bank sync fetches one Plaid page per action and stages at most 100 changes/removals or 512 KB per batch. It fetches the full update before applying changes, then applies removals in a second pass so pending replacements can cross page boundaries. The connection cursor and last successful sync advance only after every batch commits. Imports can become visible in parts while the connection shows `syncing`. Interrupted actions have a delayed retry; failed steps pause until a manual sync, bank event, or scheduled poll resumes them. Pagination mutation errors restart from the saved start cursor, up to three attempts. Run IDs and batch positions reject stale or duplicate workers. Disconnecting cancels the run and removes staged batches in bounded steps, while retaining imported history. Edited classifications, notes, descriptions, and original budget placement survive updates. If a bank amount changes, edited split categories keep their proportions, with any cent remainder in the last category.
+
+These limits apply to transaction pages and each bank sync step. Dashboard, accounting, reporting, and some other monthly queries still read monthly entries in full. The bank poll still reads the connections table in full. These paths need separate scaling work before large production workloads. The in-memory checks cover the staged flow and simulated failures, but do not prove live Convex cursor behavior or live Plaid integration. Recurring suggestions estimate monthly charges from three similar posted entries; estimates are not bill reminders. This branch is not configured for Plaid Production.
 
 ## Project workflow
 

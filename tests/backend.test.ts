@@ -1,231 +1,19 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import type {
-	FunctionArgs,
-	FunctionReference,
-	FunctionReturnType,
-	RegisteredMutation,
-	RegisteredQuery,
-} from "convex/server";
-import type { Id } from "../convex/_generated/dataModel";
 import * as accounts from "../convex/accounts.ts";
-import { authComponent } from "../convex/auth.ts";
 import * as bank from "../convex/bank.ts";
 import * as budgets from "../convex/budgets.ts";
 import * as contributions from "../convex/contributions.ts";
 import * as personalAllocations from "../convex/personalAllocations.ts";
 import * as sharing from "../convex/sharing.ts";
+import {
+	connectedAccount,
+	entry,
+	fixture,
+	id,
+	invoke,
+} from "./helpers/backend.ts";
 
-type Reference<T> =
-	T extends RegisteredQuery<infer V, infer A, infer R>
-		? FunctionReference<"query", V, A, Awaited<R>>
-		: T extends RegisteredMutation<infer V, infer A, infer R>
-			? FunctionReference<"mutation", V, A, Awaited<R>>
-			: never;
-type Row = Record<string, unknown> & { _id: string; _creationTime: number };
-type Predicate = (row: Row) => boolean;
-class Memory {
-	rows = new Map<string, Row>();
-	sequence = 0;
-	current = "alice";
-	async insert(table: string, value: Record<string, unknown>) {
-		const id = `${table}:${++this.sequence}`;
-		this.rows.set(id, {
-			...value,
-			_id: id,
-			_creationTime: Date.now() - 100000 + this.sequence,
-		});
-		return id;
-	}
-	async get(id: string) {
-		return this.rows.get(id) ?? null;
-	}
-	async patch(id: string, value: Record<string, unknown>) {
-		const row = this.rows.get(id);
-		if (!row) throw new Error("Missing row");
-		this.rows.set(id, { ...row, ...value });
-	}
-	async delete(id: string) {
-		this.rows.delete(id);
-	}
-	query(table: string) {
-		const predicates: Predicate[] = [];
-		let descending = false;
-		const all = () =>
-			[...this.rows.values()]
-				.filter(
-					(x) => x._id.startsWith(`${table}:`) && predicates.every((p) => p(x)),
-				)
-				.sort((a, b) => {
-					const key =
-						table === "transactions"
-							? "date"
-							: table === "plans"
-								? "month"
-								: "_creationTime";
-					return (
-						String(a[key]).localeCompare(String(b[key])) * (descending ? -1 : 1)
-					);
-				});
-		const range = {
-			eq: (field: string, value: unknown) => {
-				predicates.push((row) => row[field] === value);
-				return range;
-			},
-			gte: (field: string, value: string) => {
-				predicates.push((row) => String(row[field]) >= value);
-				return range;
-			},
-			lt: (field: string, value: string) => {
-				predicates.push((row) => String(row[field]) < value);
-				return range;
-			},
-		};
-		const field = (name: string) => (row: Row) => row[name];
-		const value = (item: unknown, row: Row) =>
-			typeof item === "function" ? (item as (row: Row) => unknown)(row) : item;
-		const query = {
-			withIndex: (_index: string, fn: (q: typeof range) => unknown) => {
-				fn(range);
-				return query;
-			},
-			filter: (
-				fn: (q: {
-					field: typeof field;
-					eq: (a: unknown, b: unknown) => Predicate;
-					lte: (a: unknown, b: unknown) => Predicate;
-				}) => Predicate,
-			) => {
-				predicates.push(
-					fn({
-						field,
-						eq: (a, b) => (row) => value(a, row) === value(b, row),
-						lte: (a, b) => (row) =>
-							Number(value(a, row)) <= Number(value(b, row)),
-					}),
-				);
-				return query;
-			},
-			order: (direction: string) => {
-				descending = direction === "desc";
-				return query;
-			},
-			collect: async () => all(),
-			first: async () => all()[0] ?? null,
-			unique: async () => {
-				const rows = all();
-				if (rows.length > 1) throw new Error("Not unique");
-				return rows[0] ?? null;
-			},
-		};
-		return query;
-	}
-}
-let actor = "alice";
-Object.defineProperty(authComponent, "getAuthUser", {
-	value: async () => ({
-		_id: actor,
-		email: `${actor}@example.com`,
-		name: actor,
-	}),
-});
-async function invoke<T>(
-	fn: T,
-	db: Memory,
-	args: FunctionArgs<Reference<T>>,
-): Promise<FunctionReturnType<Reference<T>>> {
-	actor = db.current;
-	const backup = structuredClone(db.rows);
-	try {
-		return await (
-			fn as unknown as {
-				_handler: (
-					ctx: unknown,
-					args: unknown,
-				) => Promise<FunctionReturnType<Reference<T>>>;
-			}
-		)._handler({ db, scheduler: { runAfter: async () => null } }, args);
-	} catch (error) {
-		db.rows = backup;
-		throw error;
-	}
-}
-const id = <
-	T extends
-		| "spaces"
-		| "accounts"
-		| "categories"
-		| "transactions"
-		| "connections"
-		| "plans"
-		| "contributions",
->(
-	value: string,
-) => value as Id<T>;
-async function connectedAccount(
-	db: Memory,
-	spaceId: Id<"spaces">,
-	name = "Checking",
-) {
-	const connectionId = await db.insert("connections", {
-		userId: db.current,
-		itemId: `fixture-item-${db.sequence}`,
-		accessToken: "encrypted",
-		institution: "Fixture Bank",
-		institutionId: "fixture-bank",
-		status: "connected",
-	});
-	return id<"accounts">(
-		await db.insert("accounts", {
-			userId: db.current,
-			spaceId,
-			connectionId,
-			externalId: `fixture-account-${db.sequence}`,
-			name,
-			type: "checking",
-			mask: "0000",
-			active: true,
-			revision: 0,
-		}),
-	);
-}
-async function fixture() {
-	const db = new Memory();
-	await invoke(budgets.setup, db, { name: "Alice", timeZone: "America/Boise" });
-	const privateId = id<"spaces">(
-		[...db.rows.values()].find((x) => x.type === "private")!._id,
-	);
-	const categoryId = id<"categories">(
-		[...db.rows.values()].find((x) => x.name === "Groceries")!._id,
-	);
-	const accountId = await connectedAccount(db, privateId);
-	return { db, privateId, categoryId, accountId };
-}
-async function entry(
-	db: Memory,
-	spaceId: Id<"spaces">,
-	accountId: Id<"accounts">,
-	amount: number,
-	kind: "income" | "purchase" | "transfer",
-	categoryId?: Id<"categories">,
-	date = "2026-09-10",
-) {
-	return db.insert("transactions", {
-		spaceId,
-		accountId,
-		amount,
-		kind,
-		date,
-		source: "manual",
-		description: "Entry",
-		pending: false,
-		splits: categoryId ? [{ categoryId, amount }] : [],
-		removed: false,
-		note: "",
-		revision: 0,
-		edited: false,
-	}) as Promise<Id<"transactions">>;
-}
 test("private budget reads and edits are denied to another user", async () => {
 	const { db, privateId } = await fixture();
 	db.current = "bob";
@@ -377,6 +165,7 @@ test("shared alerts use posted spending and keep read state separate for each pa
 	assert.deepEqual(alerts, [
 		{
 			key: `${spaceId}:2026-09:${categoryId}:near`,
+			severity: "near",
 			text: `${categories[0].name}: 80% or more used`,
 			read: false,
 		},
@@ -411,7 +200,7 @@ test("reconciliation retains manual classifications and counts only the imported
 		spaceId: privateId,
 		month: "2026-09",
 	});
-	assert.equal(page.total, 1);
+	assert.equal(page.rows.length, 1);
 	assert.equal(page.rows[0]._id, importId);
 	assert.equal(page.rows[0].note, "Weekly groceries");
 	assert.deepEqual(page.rows[0].splits, [{ categoryId, amount: 1000 }]);
@@ -665,7 +454,7 @@ test("planned contributions can change after saving and both budgets must be sav
 		assert.equal(saved.balance, 0);
 	}
 });
-test("sharing an account preserves private history and leaving limits future reads", async () => {
+test("sharing preserves private history and leaving deletes shared history", async () => {
 	const { db, privateId, accountId } = await fixture();
 	const sharedId = await invoke(sharing.create, db, {});
 	const before = await entry(db, privateId, accountId, 100, "transfer");
@@ -677,15 +466,15 @@ test("sharing an account preserves private history and leaving limits future rea
 	assert.equal((await db.get(before))!.spaceId, privateId);
 	const previous = await entry(db, sharedId, accountId, 200, "transfer");
 	await invoke(sharing.leave, db, { spaceId: sharedId });
-	const future = await entry(db, sharedId, accountId, 300, "transfer");
-	await db.patch(future, { _creationTime: Date.now() + 1000 });
-	const page = await invoke(budgets.transactions, db, {
-		spaceId: sharedId,
-		month: "2026-09",
-	});
-	assert.deepEqual(
-		page.rows.map((x) => x._id),
-		[previous],
+	assert.equal(await db.get(previous), null);
+	assert.ok(await db.get(before));
+	await assert.rejects(
+		() =>
+			invoke(budgets.transactions, db, {
+				spaceId: sharedId,
+				month: "2026-09",
+			}),
+		/not found/,
 	);
 	assert.equal((await db.get(accountId))!.spaceId, privateId);
 	await assert.rejects(
@@ -695,7 +484,7 @@ test("sharing an account preserves private history and leaving limits future rea
 				name: "Forbidden",
 				color: "#123456",
 			}),
-		/access/,
+		/not found/,
 	);
 });
 test("contribution matches cancel across budgets and stop counting when a bank correction invalidates them", async () => {
@@ -766,7 +555,7 @@ test("bank imports are idempotent and posted entries replace pending entries", a
 		expectedCursor: "1",
 		cursor: "2",
 		changed: [posted],
-		removed: ["pending"],
+		removed: [{ transaction_id: "pending", account_id: "a" }],
 	});
 	await invoke(bank.apply, db, {
 		id: connectionId,
@@ -817,7 +606,7 @@ test("category deletion reassigns transactions and preserves the sum of plan lim
 	assert.equal(result.entries[0].splits[0].categoryId, replacementId);
 	assert.equal(result.spending, 1000);
 });
-test("manual entry CRUD checks split totals and refuses deletion of imported entries", async () => {
+test("manual entries are saved as posted, check split totals, and refuse deletion of imports", async () => {
 	const { db, privateId, categoryId, accountId } = await fixture();
 	const value = {
 		spaceId: privateId,
@@ -831,10 +620,11 @@ test("manual entry CRUD checks split totals and refuses deletion of imported ent
 		splits: [{ categoryId, amount: 1000 }],
 		revision: 0,
 	};
-	await invoke(budgets.saveTransaction, db, value);
+	await invoke(budgets.saveTransaction, db, { ...value, pending: true });
 	const transaction = id<"transactions">(
 		[...db.rows.values()].find((x) => x._id.startsWith("transactions:"))!._id,
 	);
+	assert.equal((await db.get(transaction))!.pending, false);
 	await assert.rejects(
 		() =>
 			invoke(budgets.saveTransaction, db, {
@@ -845,13 +635,16 @@ test("manual entry CRUD checks split totals and refuses deletion of imported ent
 			}),
 		/total/,
 	);
+	await db.patch(transaction, { pending: true });
 	await invoke(budgets.saveTransaction, db, {
 		...value,
 		id: transaction,
 		revision: 1,
 		note: "Changed",
+		pending: true,
 	});
 	assert.equal((await db.get(transaction))!.note, "Changed");
+	assert.equal((await db.get(transaction))!.pending, false);
 	await invoke(budgets.deleteTransaction, db, { id: transaction, revision: 2 });
 	assert.equal(await db.get(transaction), null);
 	const imported = await entry(
@@ -866,6 +659,22 @@ test("manual entry CRUD checks split totals and refuses deletion of imported ent
 	await assert.rejects(
 		() => invoke(budgets.deleteTransaction, db, { id: imported, revision: 0 }),
 		/Only manual/,
+	);
+	await db.patch(imported, { pending: true });
+	await invoke(budgets.saveTransaction, db, {
+		...value,
+		id: imported,
+		pending: true,
+	});
+	assert.equal((await db.get(imported))!.pending, true);
+	await assert.rejects(
+		() =>
+			invoke(budgets.saveTransaction, db, {
+				...value,
+				id: imported,
+				revision: 1,
+			}),
+		/pending status are set by the bank/,
 	);
 });
 

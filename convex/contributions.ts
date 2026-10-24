@@ -1,8 +1,35 @@
 import { ConvexError, v } from "convex/values";
 import { assertRevision, money, month } from "../src/domain/budget";
+import type { Id } from "./_generated/dataModel";
 import { mutation, query } from "./_generated/server";
-import { access } from "./access";
+import { access, type DbCtx } from "./access";
 import { sharedForPersonal } from "./model/personalFunding";
+
+// Use the same month and membership rules for controls and direct API calls.
+async function contributionAccess(
+	ctx: DbCtx,
+	privateId: Id<"spaces">,
+	sharedId: Id<"spaces">,
+	m: string,
+	write = false,
+) {
+	const { space, membership: personalMembership } = await access(
+		ctx,
+		privateId,
+		write,
+	);
+	const { space: shared, membership } = await access(ctx, sharedId, write);
+	month(m);
+	if (space.type !== "private" || shared.type !== "shared")
+		throw new ConvexError("Select a private and shared budget.");
+	const fundedByShared = Boolean(await sharedForPersonal(ctx, space, m));
+	return {
+		fundedByShared,
+		canEdit: personalMembership.active && membership.active && !fundedByShared,
+		cutoff: membership.active ? Infinity : (membership.leftAt ?? 0),
+	};
+}
+
 export const list = query({
 	args: {
 		privateId: v.id("spaces"),
@@ -10,18 +37,37 @@ export const list = query({
 		month: v.string(),
 	},
 	handler: async (ctx, args) => {
-		const { space } = await access(ctx, args.privateId);
-		const { space: shared } = await access(ctx, args.sharedId, true);
-		month(args.month);
-		if (space.type !== "private" || shared.type !== "shared")
-			throw new ConvexError("Select a private and shared budget.");
-		const contribution = await ctx.db
+		const { canEdit, cutoff } = await contributionAccess(
+			ctx,
+			args.privateId,
+			args.sharedId,
+			args.month,
+		);
+		let contribution = await ctx.db
 			.query("contributions")
 			.withIndex("by_private", (q) =>
 				q.eq("privateId", args.privateId).eq("month", args.month),
 			)
 			.filter((q) => q.eq(q.field("sharedId"), args.sharedId))
 			.unique();
+		if (contribution && contribution._creationTime > cutoff)
+			contribution = null;
+		if (contribution && Number.isFinite(cutoff)) {
+			const pairs = [];
+			for (const pair of contribution.pairs) {
+				const outgoing = await ctx.db.get(pair.outId);
+				const incoming = await ctx.db.get(pair.inId);
+				if (
+					outgoing &&
+					incoming &&
+					outgoing._creationTime <= cutoff &&
+					incoming._creationTime <= cutoff
+				)
+					pairs.push(pair);
+			}
+			contribution = { ...contribution, pairs };
+		}
+		if (!canEdit) return { contribution, suggestions: [], canEdit };
 		const personal = await ctx.db
 			.query("transactions")
 			.withIndex("by_space_date", (q) => q.eq("spaceId", args.privateId))
@@ -72,7 +118,7 @@ export const list = query({
 						amount: out.amount,
 					})),
 			);
-		return { contribution, suggestions };
+		return { contribution, suggestions, canEdit };
 	},
 });
 export const savePlanned = mutation({
@@ -84,16 +130,18 @@ export const savePlanned = mutation({
 		revision: v.number(),
 	},
 	handler: async (ctx, args) => {
-		const { space } = await access(ctx, args.privateId, true);
-		const { space: shared } = await access(ctx, args.sharedId, true);
-		month(args.month);
+		const { fundedByShared } = await contributionAccess(
+			ctx,
+			args.privateId,
+			args.sharedId,
+			args.month,
+			true,
+		);
 		money(args.planned, true);
-		if (await sharedForPersonal(ctx, space, args.month))
+		if (fundedByShared)
 			throw new ConvexError(
 				"Assign personal funding from the shared monthly budget.",
 			);
-		if (space.type !== "private" || shared.type !== "shared")
-			throw new ConvexError("Select a private and shared budget.");
 		const old = await ctx.db
 			.query("contributions")
 			.withIndex("by_private", (q) =>
@@ -219,8 +267,17 @@ export const unmatch = mutation({
 	handler: async (ctx, args) => {
 		const c = await ctx.db.get(args.id);
 		if (!c) throw new ConvexError("Contribution not found.");
-		await access(ctx, c.privateId, true);
-		await access(ctx, c.sharedId, true);
+		const { fundedByShared } = await contributionAccess(
+			ctx,
+			c.privateId,
+			c.sharedId,
+			c.month,
+			true,
+		);
+		if (fundedByShared)
+			throw new ConvexError(
+				"Historical contributions are read-only for shared-funded months.",
+			);
 		assertRevision(c.revision, args.revision);
 		await ctx.db.patch(c._id, {
 			pairs: c.pairs.filter((x) => x.outId !== args.outId),

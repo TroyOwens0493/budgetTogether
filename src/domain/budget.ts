@@ -38,6 +38,7 @@ export function planBalance(
 	incoming = 0,
 	outgoing = 0,
 	carry = 0,
+	fundAmount = 0,
 ): number {
 	for (const value of [
 		plan.expectedIncome,
@@ -45,6 +46,7 @@ export function planBalance(
 		incoming,
 		outgoing,
 		carry,
+		fundAmount,
 		...plan.limits.map((x) => x.amount),
 	])
 		money(value, true);
@@ -56,6 +58,7 @@ export function planBalance(
 			carry -
 			outgoing -
 			plan.savingsTarget -
+			fundAmount -
 			plan.limits.reduce((sum, x) => sum + x.amount, 0),
 	);
 }
@@ -64,7 +67,7 @@ export type Entry = {
 	kind: "purchase" | "income" | "transfer";
 	pending: boolean;
 	removed?: boolean;
-	splits: { categoryId: string; amount: number }[];
+	splits: { categoryId: string; amount: number; fundId?: string }[];
 };
 export function validateSplits(amount: number, splits: Entry["splits"]): void {
 	money(amount);

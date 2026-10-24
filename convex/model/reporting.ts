@@ -10,6 +10,7 @@ import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { access, readCutoff } from "../access";
 import { results } from "./accounting";
+import { sameAllocations } from "./funds";
 
 export async function dashboard(
 	ctx: QueryCtx,
@@ -60,13 +61,17 @@ export async function dashboard(
 					expectedIncome: result.fundedBy ? 0 : plan.expectedIncome,
 					saved:
 						isPlanSaved(plan) &&
+						sameAllocations(
+							plan.fundAllocations,
+							result.fundPlan.allocations,
+						) &&
 						(!result.fundedBy || plan.expectedIncome === 0),
 				}
 			: null,
 		categories: categories.sort((a, b) => a.order - b.order),
 		reserved,
 		available: leftovers(
-			result.savings,
+			result.unreservedSavings,
 			plan?.savingsTarget ?? 0,
 			reserved.reduce((s, x) => s + x.amount, 0),
 		),
@@ -79,6 +84,7 @@ export async function dashboard(
 					result.funds.incoming,
 					result.funds.outgoing,
 					result.funds.carry,
+					result.fundPlan.total,
 				)
 			: null,
 	};
@@ -100,7 +106,7 @@ export async function list(
 			income: result.income,
 			spending: result.spending,
 			savings: result.savings,
-			categories: result.categories,
+			categories: result.spendingCategories,
 		});
 	}
 	return rows;

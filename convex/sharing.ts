@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { partnerEmailError } from "../src/domain/validation";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
@@ -8,8 +9,9 @@ import {
 	mutation,
 	query,
 } from "./_generated/server";
-import { access, privateSpace, user } from "./access";
+import { access, user } from "./access";
 import { sendEmail } from "./email";
+import * as sharedDeletion from "./model/sharedDeletion";
 import { hash } from "./plaidClient";
 
 async function activeShared(ctx: Parameters<typeof user>[0], userId: string) {
@@ -123,11 +125,8 @@ export const storeInvite = internalMutation({
 		if (space.type !== "shared")
 			throw new ConvexError("Invite a partner from a shared budget.");
 		const email = args.email.trim().toLowerCase();
-		if (
-			!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-			email === current.email.toLowerCase()
-		)
-			throw new ConvexError("Enter your partner’s email address.");
+		const error = partnerEmailError(email, current.email);
+		if (error) throw new ConvexError(error);
 		const members = await ctx.db
 			.query("memberships")
 			.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
@@ -198,7 +197,8 @@ export const send = internalAction({
 export const markDelivery = internalMutation({
 	args: { id: v.id("invitations"), status: v.string() },
 	handler: async (ctx, args) => {
-		await ctx.db.patch(args.id, { delivery: args.status });
+		if (await ctx.db.get(args.id))
+			await ctx.db.patch(args.id, { delivery: args.status });
 	},
 });
 export const revoke = mutation({
@@ -270,43 +270,14 @@ export const acceptHash = internalMutation({
 export const leave = mutation({
 	args: { spaceId: v.id("spaces") },
 	handler: async (ctx, args) => {
-		const { current, space, membership } = await access(
-			ctx,
-			args.spaceId,
-			true,
-		);
+		const { space } = await access(ctx, args.spaceId, true);
 		if (space.type !== "shared")
 			throw new ConvexError("You can leave only a shared budget.");
-		const destination = await privateSpace(ctx, current._id);
-		const now = Date.now();
-		const parts = new Intl.DateTimeFormat("en-CA", {
-			timeZone: space.timeZone,
-			year: "numeric",
-			month: "2-digit",
-			day: "2-digit",
-		}).formatToParts(new Date(now));
-		const date = `${parts.find((x) => x.type === "year")!.value}-${parts.find((x) => x.type === "month")!.value}-${parts.find((x) => x.type === "day")!.value}`;
-		for (const account of await ctx.db
-			.query("accounts")
-			.withIndex("by_user", (q) => q.eq("userId", current._id))
-			.collect())
-			if (account.spaceId === args.spaceId)
-				await ctx.db.patch(account._id, {
-					spaceId: destination._id,
-					assignments: [
-						...(account.assignments ?? [
-							{ spaceId: account.spaceId, startsOn: "0000-01-01" },
-						]),
-						{ spaceId: destination._id, startsOn: date },
-					],
-					revision: account.revision + 1,
-				});
-		for (const invitation of await ctx.db
-			.query("invitations")
-			.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
-			.collect())
-			if (invitation.status === "pending")
-				await ctx.db.patch(invitation._id, { status: "revoked" });
-		await ctx.db.patch(membership._id, { active: false, leftAt: now });
+		await sharedDeletion.remove(ctx, space);
 	},
+});
+
+export const purge = internalMutation({
+	args: { spaceId: v.id("spaces") },
+	handler: sharedDeletion.purge,
 });
