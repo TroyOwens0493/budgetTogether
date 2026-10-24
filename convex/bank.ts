@@ -13,13 +13,16 @@ import {
 import { type DbCtx, privateSpace, user } from "./access";
 import { removedValidator, SYNC_BATCH_SIZE, txValidator } from "./bankTypes";
 import { applyChanges, applyRemovals } from "./model/bankImport";
+import { updateCashBalances } from "./model/investmentImport";
 import {
 	decrypt,
+	accountBalance,
 	encrypt,
 	type PlaidAccount,
 	PlaidError,
 	type PlaidTransaction,
 	plaid,
+	selectAccount,
 	type SyncPage,
 } from "./plaidClient";
 import { bankAccount as accountValidator } from "./schema";
@@ -41,7 +44,10 @@ export const connection = internalQuery({
 	},
 });
 export const link = action({
-	args: { connectionId: v.optional(v.id("connections")) },
+	args: {
+		connectionId: v.optional(v.id("connections")),
+		investments: v.optional(v.boolean()),
+	},
 	handler: async (ctx, args): Promise<string> => {
 		const owner = await ctx.runQuery(internal.bank.identity, {});
 		const body: Record<string, unknown> = {
@@ -65,9 +71,11 @@ export const link = action({
 			if (c.status === "disconnected")
 				throw new ConvexError("Connect this bank again to resume imports.");
 			body.access_token = await decrypt(c.accessToken);
+			if (c.product === "investments") delete body.account_filters;
 		} else {
-			body.products = ["transactions"];
-			body.transactions = { days_requested: 180 };
+			body.products = [args.investments ? "investments" : "transactions"];
+			if (args.investments) delete body.account_filters;
+			else body.transactions = { days_requested: 180 };
 		}
 		const result = await plaid<{ link_token: string }>(
 			"/link/token/create",
@@ -77,7 +85,7 @@ export const link = action({
 	},
 });
 export const exchange = action({
-	args: { publicToken: v.string() },
+	args: { publicToken: v.string(), investments: v.optional(v.boolean()) },
 	handler: async (ctx, args): Promise<Id<"connections">> => {
 		const owner = await ctx.runQuery(internal.bank.identity, {});
 		const token = await plaid<{ access_token: string; item_id: string }>(
@@ -103,16 +111,8 @@ export const exchange = action({
 				accessToken: await encrypt(token.access_token),
 				institution: institution.institution.name,
 				institutionId: item.item.institution_id,
-				accounts: accounts.accounts.map((a) => ({
-					account_id: a.account_id,
-					name: a.name,
-					type: a.type,
-					subtype: a.subtype,
-					mask: a.mask,
-					...(a.persistent_account_id
-						? { persistent_account_id: a.persistent_account_id }
-						: {}),
-				})),
+				product: args.investments ? "investments" : undefined,
+				accounts: accounts.accounts.map(selectAccount),
 			});
 			await ctx.scheduler.runAfter(0, internal.bank.syncInternal, { id });
 			return id;
@@ -132,6 +132,7 @@ export const store = internalMutation({
 		accessToken: v.string(),
 		institution: v.string(),
 		institutionId: v.string(),
+		product: v.optional(v.literal("investments")),
 		accounts: v.array(accountValidator),
 	},
 	handler: async (ctx, args) => {
@@ -141,11 +142,15 @@ export const store = internalMutation({
 			.unique();
 		if (existing) throw new ConvexError("This bank connection already exists.");
 		const supported = args.accounts.filter((a) =>
-			["checking", "savings", "credit card"].includes(a.subtype ?? ""),
+			args.product === "investments"
+				? a.type === "investment"
+				: ["checking", "savings", "credit card"].includes(a.subtype ?? ""),
 		);
 		if (!supported.length)
 			throw new ConvexError(
-				"Select a checking, savings, or credit card account.",
+				args.product === "investments"
+					? "Select an investment account."
+					: "Select a checking, savings, or credit card account.",
 			);
 		for (const a of supported)
 			if (a.persistent_account_id) {
@@ -173,6 +178,7 @@ export const store = internalMutation({
 			accessToken: args.accessToken,
 			institution: args.institution,
 			institutionId: args.institutionId,
+			product: args.product,
 			status: needsReview ? "review" : "syncing",
 			pendingAccounts: needsReview ? supported : undefined,
 		});
@@ -186,7 +192,14 @@ export const store = internalMutation({
 					? { persistentId: a.persistent_account_id }
 					: {}),
 				name: a.name,
-				type: a.subtype!,
+				type: a.subtype ?? a.type,
+				investment: args.product === "investments" ? true : undefined,
+				balance: accountBalance(a),
+				currency:
+					a.balances?.iso_currency_code ??
+					a.balances?.unofficial_currency_code ??
+					"unknown",
+				balanceAsOf: a.balances ? Date.now() : undefined,
 				mask: a.mask ?? "",
 				active: true,
 				revision: 0,
@@ -225,7 +238,7 @@ async function possibleDuplicate(
 			.collect()) {
 			if (
 				!existing.connectionId ||
-				existing.type !== account.subtype ||
+				existing.type !== (account.subtype ?? account.type) ||
 				existing.mask !== account.mask
 			)
 				continue;
@@ -309,6 +322,13 @@ export const confirmAccounts = mutation({
 					: {}),
 				name: a.name,
 				type: a.subtype ?? a.type,
+				investment: c.product === "investments" ? true : undefined,
+				balance: accountBalance(a),
+				currency:
+					a.balances?.iso_currency_code ??
+					a.balances?.unofficial_currency_code ??
+					"unknown",
+				balanceAsOf: a.balances ? Date.now() : undefined,
 				mask: a.mask ?? "",
 				active: true,
 				revision: 0,
@@ -412,6 +432,13 @@ export const beginSync = internalMutation({
 export const syncInternal = internalAction({
 	args: { id: v.id("connections"), runId: v.optional(v.id("bankSyncRuns")) },
 	handler: async (ctx, args): Promise<void> => {
+		const connection = await ctx.runQuery(internal.bank.connection, {
+			id: args.id,
+		});
+		if (connection.product === "investments") {
+			await ctx.runAction(internal.investments.sync, { id: args.id });
+			return;
+		}
 		const state = await ctx.runMutation(internal.bank.beginSync, args);
 		if (!state) return;
 		const { run } = state;
@@ -427,6 +454,7 @@ export const syncInternal = internalAction({
 					page: run.pages,
 					cursor: page.next_cursor,
 					more: page.has_more,
+					accounts: page.accounts.map(selectAccount),
 					changed: [...page.added, ...page.modified].map(selectTransaction),
 					removed: page.removed.map((x) => ({
 						account_id: x.account_id,
@@ -463,14 +491,6 @@ function selectTransaction(x: PlaidTransaction): PlaidTransaction {
 			? { pending_transaction_id: x.pending_transaction_id }
 			: {}),
 		...(x.merchant_name ? { merchant_name: x.merchant_name } : {}),
-		...(x.personal_finance_category
-			? {
-					personal_finance_category: {
-						primary: x.personal_finance_category.primary,
-						detailed: x.personal_finance_category.detailed,
-					},
-				}
-			: {}),
 	};
 }
 const syncPhase = v.union(
@@ -511,6 +531,7 @@ export const stageSync = internalMutation({
 		more: v.boolean(),
 		changed: v.array(txValidator),
 		removed: v.array(removedValidator),
+		accounts: v.optional(v.array(accountValidator)),
 	},
 	handler: async (ctx, args) => {
 		const state = await currentRun(ctx, args.runId);
@@ -521,6 +542,8 @@ export const stageSync = internalMutation({
 		)
 			return;
 		checkBatch(args.changed, args.removed);
+		if (args.accounts)
+			await updateCashBalances(ctx, state.connection._id, args.accounts);
 		if (args.more && args.cursor === state.run.cursor)
 			throw new ConvexError("Bank sync cursor did not advance.");
 		await ctx.db.insert("bankSyncBatches", {

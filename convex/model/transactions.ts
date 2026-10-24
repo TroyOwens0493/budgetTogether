@@ -138,6 +138,13 @@ export async function save(
 		note: args.note,
 		splits: args.splits,
 		funded: args.splits.some((split) => Boolean(split.fundId)),
+		...(old?.source === "plaid"
+			? {
+					classificationStatus: "manual" as const,
+					classificationRetryAt: undefined,
+					classificationError: undefined,
+				}
+			: {}),
 		revision: (old?.revision ?? 0) + 1,
 		edited: true,
 	};
@@ -203,6 +210,9 @@ export async function reconcile(
 		splits: manual.splits,
 		funded: manual.splits.some((split) => Boolean(split.fundId)),
 		edited: true,
+		classificationStatus: "manual",
+		classificationRetryAt: undefined,
+		classificationError: undefined,
 		revision: imported.revision + 1,
 	});
 	await ctx.db.patch(manual._id, {

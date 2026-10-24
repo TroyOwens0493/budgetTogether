@@ -1,7 +1,37 @@
 import { money } from "../../src/domain/budget";
+import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { PlaidTransaction } from "../plaidClient";
+
+async function ignored(
+	ctx: MutationCtx,
+	accountId: Id<"accounts">,
+	externalId: string,
+) {
+	return ctx.db
+		.query("ignoredBankTransactions")
+		.withIndex("by_external", (q) =>
+			q.eq("accountId", accountId).eq("externalId", externalId),
+		)
+		.unique();
+}
+
+/** Keep only import identifiers, never the deleted budget or transaction content. */
+export async function forgetImport(
+	ctx: MutationCtx,
+	row: Pick<
+		Doc<"transactions">,
+		"accountId" | "externalId" | "pendingExternalId"
+	>,
+) {
+	for (const externalId of new Set([row.externalId, row.pendingExternalId]))
+		if (externalId && !(await ignored(ctx, row.accountId, externalId)))
+			await ctx.db.insert("ignoredBankTransactions", {
+				accountId: row.accountId,
+				externalId,
+			});
+}
 
 // Callers bound each batch and check the connection/run before any writes.
 export async function applyChanges(
@@ -17,6 +47,20 @@ export async function applyChanges(
 			)
 			.unique();
 		if (!account) continue;
+		const identifiers = {
+			accountId: account._id,
+			externalId: x.transaction_id,
+			pendingExternalId: x.pending_transaction_id ?? undefined,
+		};
+		if (
+			(await ignored(ctx, account._id, x.transaction_id)) ||
+			(x.pending_transaction_id &&
+				(await ignored(ctx, account._id, x.pending_transaction_id)))
+		) {
+			// A posted replacement may later be replayed without its pending ID.
+			await forgetImport(ctx, identifiers);
+			continue;
+		}
 		const amount = money(Math.round(x.amount * 100));
 		const old = await ctx.db
 			.query("transactions")
@@ -51,61 +95,41 @@ export async function applyChanges(
 			: pending?.edited
 				? pending
 				: (old ?? pending);
-		const primary = x.personal_finance_category?.primary ?? "";
-		const suggestedKind =
-			primary.startsWith("TRANSFER") ||
-			(x.personal_finance_category?.detailed ?? "").includes(
-				"CREDIT_CARD_PAYMENT",
-			)
-				? ("transfer" as const)
-				: primary === "INCOME"
-					? ("income" as const)
-					: ("purchase" as const);
-		const kind = prior?.edited ? prior.kind : suggestedKind;
+		// Import first; Jev classifies in a separate durable job. Until it answers,
+		// new entries are uncategorized purchases and updates retain their last type.
+		const kind = prior?.kind ?? "purchase";
 		const historicalAssignment = account.assignments
 			?.filter((a) => a.startsOn <= x.date)
 			.at(-1);
+		if (!old && !pending && historicalAssignment?.spaceId === null) {
+			await forgetImport(ctx, identifiers);
+			continue;
+		}
 		const spaceId =
 			old?.spaceId ??
 			pending?.spaceId ??
 			historicalAssignment?.spaceId ??
 			account.spaceId;
-		const detail = x.personal_finance_category?.detailed ?? "";
-		const categoryName = detail.includes("GROCERIES")
-			? "Groceries"
-			: primary === "FOOD_AND_DRINK"
-				? "Dining out"
-				: detail.includes("RENT") || detail.includes("MORTGAGE")
-					? "Housing"
-					: primary === "TRANSPORTATION" || detail.includes("GAS")
-						? "Transport"
-						: primary === "ENTERTAINMENT"
-							? "Entertainment"
-							: "Other";
-		const findCategory = (name: string) =>
-			ctx.db
-				.query("categories")
-				.withIndex("by_space_name", (q) =>
-					q.eq("spaceId", spaceId).eq("name", name),
-				)
-				.first();
-		const category =
-			kind === "purchase" && !prior?.edited
-				? ((await findCategory(categoryName)) ??
-					(await findCategory("Other")) ??
-					(await ctx.db
-						.query("categories")
-						.withIndex("by_space", (q) => q.eq("spaceId", spaceId))
-						.first()))
-				: null;
+		// Deletion can finish while bank sync has a page waiting to be applied.
+		if (!(await ctx.db.get(spaceId))) {
+			await forgetImport(ctx, identifiers);
+			continue;
+		}
 		const splits =
 			kind !== "purchase"
 				? []
-				: prior?.edited && prior.splits.length
+				: prior?.splits.length
 					? resizeSplits(prior.splits, amount)
-					: category
-						? [{ categoryId: category._id, amount }]
-						: [];
+					: [];
+		const needsClassification =
+			!prior?.edited &&
+			(!prior?.classificationStatus ||
+				prior.removed ||
+				prior.bankDescription !== x.name ||
+				prior.bankMerchant !== (x.merchant_name ?? undefined) ||
+				prior.amount !== amount ||
+				prior.date !== x.date ||
+				prior.pending !== x.pending);
 		const value = {
 			accountId: account._id,
 			spaceId,
@@ -119,7 +143,17 @@ export async function applyChanges(
 			date: x.date,
 			pending: x.pending,
 			kind,
-			suggestedKind,
+			bankDescription: x.name,
+			bankMerchant: x.merchant_name ?? undefined,
+			...(needsClassification
+				? {
+						classificationStatus: "pending" as const,
+						classificationAttempts: 0,
+						classificationRetryAt: 0,
+						classificationError: undefined,
+						suggestedKind: undefined,
+					}
+				: {}),
 			note: prior?.note ?? "",
 			splits,
 			funded: splits.some((split) => Boolean(split.fundId)),
@@ -127,6 +161,7 @@ export async function applyChanges(
 			revision: Math.max(old?.revision ?? 0, pending?.revision ?? 0) + 1,
 			edited: prior?.edited ?? false,
 		};
+		let transactionId = old?._id ?? pending?._id;
 		if (old) {
 			// Retries of a committed batch do not change revisions.
 			const same = Object.entries(value).every(
@@ -141,7 +176,11 @@ export async function applyChanges(
 					revision: pending.revision + 1,
 				});
 		} else if (pending) await ctx.db.patch(pending._id, value);
-		else await ctx.db.insert("transactions", value);
+		else transactionId = await ctx.db.insert("transactions", value);
+		if (needsClassification && transactionId)
+			await ctx.scheduler.runAfter(0, internal.classification.classify, {
+				id: transactionId,
+			});
 	}
 }
 

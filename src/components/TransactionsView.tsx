@@ -135,6 +135,12 @@ export function TransactionsView({
 											{x.source === "manual" ? "Manual" : x.kind}
 											{x.note ? ` · ${x.note}` : ""}
 										</small>
+										{!x.edited && x.classificationStatus === "pending" && (
+											<small>Classification pending</small>
+										)}
+										{!x.edited && x.classificationStatus === "review" && (
+											<span className="tag">Needs review</span>
+										)}
 									</td>
 									<td>
 										<span className="tag">
@@ -236,19 +242,21 @@ function TransactionEditor({
 		entry ? amount(entry.amount) : "",
 	);
 	const [splits, setSplits] = useState(
-		entry?.splits.map((x) => ({
-			key: crypto.randomUUID(),
-			categoryId: String(x.categoryId),
-			amount: amount(x.amount),
-			fundId: x.fundId ?? "",
-		})) ?? [
-			{
-				key: crypto.randomUUID(),
-				categoryId: categories[0]?._id ?? "",
-				amount: "0.00",
-				fundId: "",
-			},
-		],
+		entry?.splits.length
+			? entry.splits.map((x) => ({
+					key: crypto.randomUUID(),
+					categoryId: String(x.categoryId),
+					amount: amount(x.amount),
+					fundId: x.fundId ?? "",
+				}))
+			: [
+					{
+						key: crypto.randomUUID(),
+						categoryId: categories[0]?._id ?? "",
+						amount: "0.00",
+						fundId: "",
+					},
+				],
 	);
 	const [match, setMatch] = useState("");
 	const [importCursor, setImportCursor] = useState<string | undefined>();
@@ -300,6 +308,17 @@ function TransactionEditor({
 			onClose={onClose}
 		>
 			<form onSubmit={submit}>
+				{!entry?.edited && entry?.classificationStatus === "review" && (
+					<p className="banner">
+						Needs review. Check the type and category, then save.
+					</p>
+				)}
+				{!entry?.edited && entry?.classificationStatus === "pending" && (
+					<p className="banner">
+						Classification is pending. Totals can change when it finishes. You
+						can set the type and category now.
+					</p>
+				)}
 				<fieldset disabled={!active}>
 					<label>
 						Account

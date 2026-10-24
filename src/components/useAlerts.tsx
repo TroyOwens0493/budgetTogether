@@ -2,6 +2,7 @@ import { useMutation, useQuery } from "convex/react";
 import { Bell } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
+import { ErrorBanner } from "./ErrorBanner";
 import { Modal } from "./ui";
 import type { ViewProps } from "./view-types";
 
@@ -11,6 +12,18 @@ export function useAlerts({ spaceId, month, run }: Omit<ViewProps, "active">) {
 	const readAlert = useMutation(api.budgets.readAlert);
 	const [alertOpen, setAlertOpen] = useState(false);
 	return {
+		budgetNotices: alerts
+			?.filter((alert) => alert.severity === "over" && !alert.read)
+			.map((alert) => (
+				<ErrorBanner
+					key={alert.key}
+					message={alert.text}
+					dismissLabel={`Dismiss ${alert.text} notification`}
+					onDismiss={() => {
+						void run(() => readAlert({ spaceId, key: alert.key }), "");
+					}}
+				/>
+			)),
 		button: (
 			<button
 				type="button"

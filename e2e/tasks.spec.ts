@@ -1,10 +1,16 @@
 import { test as base, expect, type Page } from "@playwright/test";
 
 const month = "2099-05";
-const test = base.extend<{ household: { alice: Page; bob: Page } }>({
-	household: async ({ browser, request, baseURL }, use) => {
+const test = base.extend<{
+	household: { alice: Page; bob: Page };
+	overspending: boolean;
+}>({
+	overspending: [false, { option: true }],
+	household: async ({ browser, request, baseURL, overspending }, use) => {
 		if (!baseURL) throw new Error("The task fixture needs a base URL.");
-		const response = await request.post("/__fixture");
+		const response = await request.post(
+			overspending ? "/__fixture/overspending" : "/__fixture",
+		);
 		expect(response.ok()).toBe(true);
 		const { id } = await response.json();
 		const contexts = await Promise.all(
@@ -48,6 +54,50 @@ async function openMonthly(page: Page, space = "Shared") {
 		page.getByRole("heading", { name: "Monthly spending" }),
 	).toBeVisible();
 }
+
+test("leaving deletes the shared budget for both open sessions and cancel keeps it", async ({
+	household: { alice, bob },
+}) => {
+	const errors: string[] = [];
+	for (const page of [alice, bob])
+		page.on("pageerror", (error) => errors.push(error.message));
+	await openMonthly(alice);
+	await openMonthly(bob);
+	await alice
+		.getByRole("button", { name: "Accounts & settings", exact: true })
+		.click();
+	await alice
+		.getByRole("button", { name: "Leave shared budget", exact: true })
+		.click();
+	const dialog = alice.getByRole("dialog", {
+		name: "Leave shared budget",
+		exact: true,
+	});
+	await expect(dialog).toContainText("for both people");
+	await expect(dialog).toContainText("This cannot be undone");
+	await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+	await expect(dialog).toHaveCount(0);
+	await expect(
+		bob.getByRole("combobox", { name: "Budget space" }).locator("option"),
+	).toHaveCount(2);
+	await alice
+		.getByRole("button", { name: "Leave shared budget", exact: true })
+		.click();
+	await dialog
+		.getByRole("button", {
+			name: "Leave and delete shared budget",
+			exact: true,
+		})
+		.click();
+	for (const page of [alice, bob]) {
+		const selector = page.getByRole("combobox", { name: "Budget space" });
+		await expect(selector.locator("option")).toHaveCount(1);
+		await expect(selector.locator("option:checked")).toHaveText("My budget");
+		await page.reload();
+		await expect(selector.locator("option")).toHaveCount(1);
+	}
+	expect(errors).toEqual([]);
+});
 
 async function saveBudget(page: Page) {
 	const button = page.getByRole("button", { name: "Save budget", exact: true });
@@ -207,25 +257,6 @@ test("linking a purchase to a fund updates its balance and keeps the category bu
 	).toContainText("$600.00");
 });
 
-async function expectReviewReady(page: Page, ready: boolean) {
-	await page
-		.getByRole("button", { name: "Monthly review", exact: true })
-		.click();
-	const complete = page.getByRole("button", {
-		name: "Complete monthly review",
-	});
-	if (ready) await expect(complete).toBeEnabled();
-	else {
-		await expect(complete).toBeDisabled();
-		await expect(
-			page.getByText("Save this month’s budget before completing its review."),
-		).toBeVisible();
-	}
-	await page
-		.getByRole("button", { name: "Monthly budget", exact: true })
-		.click();
-}
-
 function allocationForm(page: Page, name = "Alice") {
 	return page.locator("form").filter({
 		has: page.getByLabel(`${name}'s personal amount`, { exact: true }),
@@ -242,6 +273,44 @@ async function saveAmount(page: Page, amount: string) {
 		page.getByText("Personal funding saved.", { exact: true }),
 	).toBeVisible();
 }
+
+test.describe("budget overspending notifications", () => {
+	test.use({ overspending: true });
+
+	test("stays until dismissed and saves dismissal separately for each partner", async ({
+		household: { alice, bob },
+	}) => {
+		await openMonthly(alice);
+		const notice = alice.getByRole("alert").filter({
+			hasText: "Groceries: over budget",
+		});
+		await expect(notice).toBeVisible();
+		await expect(notice).toHaveClass(/\berror\b/);
+		// Housing is exactly at its limit; pending spending must not trigger a notice.
+		await expect(alice.locator(".dismissible-banner")).toHaveCount(1);
+		await alice.clock.install();
+		await alice.clock.fastForward("01:00");
+		await expect(notice).toBeVisible();
+		await alice.getByRole("button", { name: "Overview", exact: true }).click();
+		await expect(notice).toHaveCount(0);
+		await alice
+			.getByRole("button", { name: "Monthly budget", exact: true })
+			.click();
+		await expect(notice).toBeVisible();
+		await notice.getByRole("button", { name: /Dismiss/ }).click();
+		await expect(notice).toHaveCount(0);
+		await alice.clock.resume();
+		await openMonthly(alice);
+		await expect(
+			alice.getByRole("button", { name: "Alerts, 1 unread" }),
+		).toBeVisible();
+		await expect(notice).toHaveCount(0);
+		await openMonthly(bob);
+		await expect(
+			bob.getByRole("alert").filter({ hasText: "Groceries: over budget" }),
+		).toBeVisible();
+	});
+});
 
 test("a balanced monthly plan saves in one step and survives reopening and reload", async ({
 	household: { alice },
@@ -262,7 +331,6 @@ test("a balanced monthly plan saves in one step and survives reopening and reloa
 		.getByLabel("Monthly savings target", { exact: true })
 		.fill("250.25");
 	await saveBudget(alice);
-	await expectReviewReady(alice, true);
 	await expect(alice.getByLabel("Groceries", { exact: true })).toHaveValue(
 		"250.00",
 	);
@@ -279,7 +347,6 @@ test("a balanced monthly plan saves in one step and survives reopening and reloa
 		["Monthly savings target", "250.25"],
 	])
 		await expect(alice.getByLabel(label, { exact: true })).toHaveValue(value);
-	await expectReviewReady(alice, true);
 	// A second save must use the new revision rather than the original one.
 	await alice.getByLabel("Housing", { exact: true }).fill("950.00");
 	await alice.getByLabel("Groceries", { exact: true }).fill("300.00");
@@ -362,7 +429,6 @@ test("personal funding changes both budgets and requires each budget to be saved
 		.getByRole("combobox", { name: "Budget space" })
 		.selectOption({ label: "My budget" });
 	await saveBudget(alice);
-	await expectReviewReady(alice, true);
 	await alice
 		.getByRole("combobox", { name: "Budget space" })
 		.selectOption({ label: "Shared" });
@@ -371,18 +437,15 @@ test("personal funding changes both budgets and requires each budget to be saved
 		alice.getByRole("button", { name: "Load current plan" }),
 	).toBeVisible();
 	await alice.getByRole("button", { name: "Load current plan" }).click();
-	await expectReviewReady(alice, false);
 	await expect(
 		alice.getByRole("button", { name: "Save budget", exact: true }),
 	).toBeDisabled();
 	await alice.getByLabel("Groceries", { exact: true }).fill("874.50");
 	await saveBudget(alice);
-	await expectReviewReady(alice, true);
 
 	await alice
 		.getByRole("combobox", { name: "Budget space" })
 		.selectOption({ label: "My budget" });
-	await expectReviewReady(alice, false);
 	await expect(
 		alice.getByLabel("Expected take-home income", { exact: true }),
 	).toHaveCount(0);
@@ -394,12 +457,10 @@ test("personal funding changes both budgets and requires each budget to be saved
 		.getByLabel("Monthly savings target", { exact: true })
 		.fill("25.50");
 	await saveBudget(alice);
-	await expectReviewReady(alice, true);
 	await openMonthly(alice, "My budget");
 	await expect(alice.getByLabel("Groceries", { exact: true })).toHaveValue(
 		"100.00",
 	);
-	await expectReviewReady(alice, true);
 	await alice
 		.getByRole("combobox", { name: "Budget space" })
 		.selectOption({ label: "Shared" });

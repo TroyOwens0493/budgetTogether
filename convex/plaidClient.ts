@@ -1,3 +1,5 @@
+import { money } from "../src/domain/budget";
+
 export class PlaidError extends Error {
 	code: string;
 	constructor(code: string) {
@@ -119,7 +121,31 @@ export type PlaidAccount = {
 	type: string;
 	subtype: string | null;
 	mask: string | null;
+	balances?: {
+		current: number | null;
+		iso_currency_code?: string | null;
+		unofficial_currency_code?: string | null;
+	};
 };
+
+// Plaid returns more balance fields than our database accepts. Select only
+// fields that cross this boundary; never forward the provider's raw object.
+export function selectAccount(account: PlaidAccount) {
+	const balances = account.balances;
+	return {
+		account_id: account.account_id, name: account.name, type: account.type,
+		subtype: account.subtype, mask: account.mask,
+		persistent_account_id: account.persistent_account_id ?? undefined,
+		balances: balances ? {
+			current: balances.current, iso_currency_code: balances.iso_currency_code ?? null,
+			unofficial_currency_code: balances.unofficial_currency_code ?? null,
+		} : undefined,
+	};
+}
+
+export function accountBalance(account: { balances?: { current: number | null } }) {
+	return account.balances?.current == null ? undefined : money(Math.round(account.balances.current * 100));
+}
 export type PlaidTransaction = {
 	transaction_id: string;
 	account_id: string;

@@ -11,6 +11,8 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { authComponent } from "../../convex/auth.ts";
 import * as bank from "../../convex/bank.ts";
 import * as budgets from "../../convex/budgets.ts";
+import * as classification from "../../convex/classification.ts";
+import * as investments from "../../convex/investments.ts";
 
 type Reference<T> =
 	T extends RegisteredQuery<infer V, infer A, infer R>
@@ -82,6 +84,10 @@ export class Memory {
 			},
 			lt: (field: string, value: string) => {
 				predicates.push((row) => String(row[field]) < value);
+				return range;
+			},
+			lte: (field: string, value: number) => {
+				predicates.push((row) => Number(row[field]) <= value);
 				return range;
 			},
 		};
@@ -193,6 +199,20 @@ export async function invoke<T>(
 		args: Record<string, unknown>,
 	) => {
 		const [module, name] = getFunctionName(reference).split(":");
+		if (module === "investments")
+			return invoke(
+				// biome-ignore lint/performance/noDynamicNamespaceImportAccess: Test-only function dispatcher.
+				investments[name as keyof typeof investments],
+				db,
+				args as never,
+			);
+		if (module === "classification")
+			return invoke(
+				// biome-ignore lint/performance/noDynamicNamespaceImportAccess: Test-only function dispatcher.
+				classification[name as keyof typeof classification],
+				db,
+				args as never,
+			);
 		if (module !== "bank")
 			throw new Error(`Unsupported harness function: ${module}:${name}`);
 		// biome-ignore lint/performance/noDynamicNamespaceImportAccess: Test-only function dispatcher.
@@ -320,7 +340,9 @@ export async function entry(
 // can explicitly simulate a lost action or an old watchdog arriving late.
 export async function drainSync(db: Memory, maxSteps = 1000) {
 	for (let step = 0; step < maxSteps; step++) {
-		const index = db.scheduled.findIndex((x) => x.delay === 0);
+		const index = db.scheduled.findIndex(
+			(x) => x.delay === 0 && x.name.startsWith("bank:"),
+		);
 		if (index < 0) return;
 		const [job] = db.scheduled.splice(index, 1);
 		if (!job.name.startsWith("bank:"))

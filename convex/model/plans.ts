@@ -79,7 +79,7 @@ export async function save(
 			)
 		)
 			throw new ConvexError(
-				`Carry-forward from ${source} is invalid. Reopen its review.`,
+				`Carry-forward from ${source} is invalid. Check that month’s transactions and savings target.`,
 			);
 	}
 	const balance = planBalance(

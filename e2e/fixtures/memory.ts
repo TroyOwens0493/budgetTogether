@@ -88,6 +88,7 @@ export class Memory {
 				return query;
 			},
 			collect: async () => all(),
+			take: async (count: number) => all().slice(0, count),
 			paginate: async (opts: { cursor: string | null; numItems: number }) => {
 				const rows = all();
 				const start = Number(opts.cursor ?? 0);

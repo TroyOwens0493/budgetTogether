@@ -35,19 +35,24 @@ export function useQuery<F extends FunctionReference<"query">>(
 	useEffect(() => {
 		let closed = false;
 		let pending = false;
+		let failed = false;
 		async function refresh() {
 			if (key === '"skip"') return;
 			if (closed || pending) return;
 			pending = true;
 			try {
 				const value = await invoke(name, JSON.parse(key));
+				failed = false;
 				const json = JSON.stringify(value);
 				if (!closed)
 					setSnapshot((old) =>
 						old.key === key && old.json === json ? old : { key, json, value },
 					);
 			} catch (error) {
-				if (!closed) setSnapshot({ key, error: error as Error });
+				// Independent polls can read a deleted budget before home removes it.
+				// Recheck once so the parent can unsubscribe; persistent errors still fail.
+				if (!closed && failed) setSnapshot({ key, error: error as Error });
+				failed = true;
 			} finally {
 				pending = false;
 			}

@@ -165,6 +165,7 @@ test("shared alerts use posted spending and keep read state separate for each pa
 	assert.deepEqual(alerts, [
 		{
 			key: `${spaceId}:2026-09:${categoryId}:near`,
+			severity: "near",
 			text: `${categories[0].name}: 80% or more used`,
 			read: false,
 		},
@@ -453,7 +454,7 @@ test("planned contributions can change after saving and both budgets must be sav
 		assert.equal(saved.balance, 0);
 	}
 });
-test("sharing an account preserves private history and leaving limits future reads", async () => {
+test("sharing preserves private history and leaving deletes shared history", async () => {
 	const { db, privateId, accountId } = await fixture();
 	const sharedId = await invoke(sharing.create, db, {});
 	const before = await entry(db, privateId, accountId, 100, "transfer");
@@ -465,15 +466,15 @@ test("sharing an account preserves private history and leaving limits future rea
 	assert.equal((await db.get(before))!.spaceId, privateId);
 	const previous = await entry(db, sharedId, accountId, 200, "transfer");
 	await invoke(sharing.leave, db, { spaceId: sharedId });
-	const future = await entry(db, sharedId, accountId, 300, "transfer");
-	await db.patch(future, { _creationTime: Date.now() + 1000 });
-	const page = await invoke(budgets.transactions, db, {
-		spaceId: sharedId,
-		month: "2026-09",
-	});
-	assert.deepEqual(
-		page.rows.map((x) => x._id),
-		[previous],
+	assert.equal(await db.get(previous), null);
+	assert.ok(await db.get(before));
+	await assert.rejects(
+		() =>
+			invoke(budgets.transactions, db, {
+				spaceId: sharedId,
+				month: "2026-09",
+			}),
+		/not found/,
 	);
 	assert.equal((await db.get(accountId))!.spaceId, privateId);
 	await assert.rejects(
@@ -483,7 +484,7 @@ test("sharing an account preserves private history and leaving limits future rea
 				name: "Forbidden",
 				color: "#123456",
 			}),
-		/access/,
+		/not found/,
 	);
 });
 test("contribution matches cancel across budgets and stop counting when a bank correction invalidates them", async () => {

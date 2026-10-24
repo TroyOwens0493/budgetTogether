@@ -82,6 +82,7 @@ export async function alerts(
 			const category = await ctx.db.get(x.categoryId);
 			items.push({
 				key,
+				severity,
 				text: `${category?.name ?? "Category"}: ${severity === "over" ? "over budget" : "80% or more used"}`,
 				read: reads.some((x) => x.key === key),
 			});
@@ -102,7 +103,8 @@ export async function alerts(
 	)
 		items.push({
 			key: `${args.spaceId}:${args.month}:carry`,
-			text: "Corrected transactions made carry-forward invalid. Reopen the monthly review.",
+			severity: "invalid" as const,
+			text: "Corrected transactions made carry-forward invalid.",
 			read: false,
 		});
 	return items;

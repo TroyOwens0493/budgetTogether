@@ -28,6 +28,13 @@ The tests cover balanced saves, reopening, reload, repeat saves, invalid amounts
 shared-to-personal funding, saving both budgets again, and concurrent plan and
 funding edits by two members. They use accessible labels and public navigation,
 so moving `PlanView` to its own module needs no test changes.
+They also check the leave confirmation, cancellation, and removal of a shared
+budget from both open sessions and after reload.
+
+Classification tests cover pending labels, uncertain answers marked for review,
+manual review that persists after reload, and editing an uncategorized import.
+They use seeded Jev results and do not call TypeSafe. The Node tests cover the
+HTTP contract, import scheduling, retries, stale answers, and legacy backfill.
 
 Fund tests cover creation with an opening balance, repeating payments and savings
 goals, the automatic read-only monthly amount, repeated saves, shared edits,
