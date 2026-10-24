@@ -3,7 +3,7 @@ import { cents, type Entry, validateSplits } from "./budget";
 export function parseTransactionAmounts(
 	kind: Entry["kind"],
 	value: string,
-	splits: { categoryId: string; amount: string }[],
+	splits: { categoryId: string; amount: string; fundId?: string }[],
 ):
 	| { data: { amount: number; splits: Entry["splits"] }; error: null }
 	| { data: null; error: string } {
@@ -14,6 +14,7 @@ export function parseTransactionAmounts(
 				? splits.map((split) => ({
 						categoryId: split.categoryId,
 						amount: splits.length === 1 ? amount : cents(split.amount),
+						...(split.fundId ? { fundId: split.fundId } : {}),
 					}))
 				: [];
 		if (kind === "purchase") validateSplits(amount, allocations);

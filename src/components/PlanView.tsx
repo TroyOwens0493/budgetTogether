@@ -30,6 +30,7 @@ export function PlanView({
 		fundedByShared: Boolean(data.fundedBy),
 		funds: data.funds,
 		revision: data.plan?.revision ?? 0,
+		fundAmount: data.fundPlan.total,
 	});
 	async function submit(e: FormEvent<HTMLFormElement>) {
 		e.preventDefault();
@@ -38,7 +39,14 @@ export function PlanView({
 		setSaving(true);
 		try {
 			const saved = await run(
-				() => save({ spaceId, month, ...plan, revision: draft.revision }),
+				() =>
+					save({
+						spaceId,
+						month,
+						...plan,
+						revision: draft.revision,
+						fundSignature: data.fundPlan.signature,
+					}),
 				"Budget saved.",
 			);
 			if (saved)
@@ -114,6 +122,30 @@ export function PlanView({
 							</label>
 						))}
 						<div className="divider" />
+						{data.fundPlan.items.length > 0 && (
+							<div className="fund-budget-row">
+								<label htmlFor="budget-funds" className="allocation-row">
+									<span>Funds</span>
+									<input
+										id="budget-funds"
+										aria-label="Funds"
+										value={(data.fundPlan.total / 100).toFixed(2)}
+										readOnly
+									/>
+								</label>
+								<small>
+									Calculated from your fund goals. Change the goals in Funds.
+								</small>
+								{data.fundPlan.items
+									.filter((fund) => fund.required > 0)
+									.map((fund) => (
+										<div className="fund-budget-detail" key={fund._id}>
+											<span>{fund.name}</span>
+											<span>{usd(fund.required)}</span>
+										</div>
+									))}
+							</div>
+						)}
 						<label htmlFor="budgetapp-target" className="allocation-row">
 							<span>Monthly savings target</span>
 							<ValidatedInput
@@ -160,6 +192,12 @@ export function PlanView({
 							<dt>Spending limits</dt>
 							<dd>{draftMoney(result.total)}</dd>
 						</div>
+						{data.fundPlan.items.length > 0 && (
+							<div>
+								<dt>Funds</dt>
+								<dd>{usd(data.fundPlan.total)}</dd>
+							</div>
+						)}
 						<div>
 							<dt>Savings target</dt>
 							<dd>{draftMoney(result.savingsTarget)}</dd>

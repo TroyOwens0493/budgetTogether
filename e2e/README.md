@@ -29,6 +29,12 @@ shared-to-personal funding, saving both budgets again, and concurrent plan and
 funding edits by two members. They use accessible labels and public navigation,
 so moving `PlanView` to its own module needs no test changes.
 
+Fund tests cover creation with an opening balance, repeating payments and savings
+goals, the automatic read-only monthly amount, repeated saves, shared edits,
+reload, next-month requirements, and linking a purchase to a fund. These tests
+use the real fund calculations and handlers with the isolated database. They do
+not change any connected Convex deployment or call a bank.
+
 The test server binds only to `127.0.0.1`, does not read environment files, and is
 never part of the app server or build. Each test deletes its household and closes
 its contexts in teardown. Server shutdown removes any state left by an interrupted

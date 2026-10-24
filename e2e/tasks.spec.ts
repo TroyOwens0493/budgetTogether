@@ -56,6 +56,157 @@ async function saveBudget(page: Page) {
 	await expect(page.getByText("Budget saved.", { exact: true })).toBeVisible();
 }
 
+async function addInsuranceFund(page: Page, opening = "0.00") {
+	await page.getByRole("button", { name: "Funds", exact: true }).click();
+	await page.getByRole("button", { name: "Add fund", exact: true }).click();
+	const dialog = page.getByRole("dialog", { name: "Add fund", exact: true });
+	await dialog.getByLabel("Fund name", { exact: true }).fill("Insurance");
+	await dialog
+		.getByLabel("Fund type", { exact: true })
+		.selectOption("repeating");
+	await dialog.getByLabel("Payment amount", { exact: true }).fill("600.00");
+	await dialog
+		.getByLabel("Next payment month", { exact: true })
+		.fill("2099-07");
+	await dialog.getByLabel("Pay every (months)").fill("6");
+	await dialog
+		.getByLabel("Amount already saved", { exact: false })
+		.fill(opening);
+	await dialog.getByRole("button", { name: "Save fund", exact: true }).click();
+	await expect(dialog).toHaveCount(0);
+	return page.getByRole("article").filter({
+		has: page.getByRole("heading", { name: "Insurance", exact: true }),
+	});
+}
+
+test("funds set automatic monthly amounts, share updates, and reserve each saved month once", async ({
+	household: { alice, bob },
+}) => {
+	await openMonthly(alice);
+	await expect(alice.getByLabel("Funds", { exact: true })).toHaveCount(0);
+	let card = await addInsuranceFund(alice);
+	await expect(card.locator(".fund-monthly")).toHaveText(
+		"$200.00required per month",
+	);
+	await alice.getByRole("button", { name: "Add fund", exact: true }).click();
+	const dialog = alice.getByRole("dialog", { name: "Add fund", exact: true });
+	await dialog.getByLabel("Fund name", { exact: true }).fill("Vehicle");
+	await dialog.getByLabel("Goal amount", { exact: true }).fill("15000");
+	await dialog
+		.getByLabel("Amount already saved", { exact: false })
+		.fill("2000");
+	await dialog.getByLabel("Target month", { exact: true }).fill("2099-10");
+	await dialog.getByRole("button", { name: "Save fund", exact: true }).click();
+	await expect(dialog).toHaveCount(0);
+	await alice
+		.getByRole("button", { name: "Monthly budget", exact: true })
+		.click();
+	await expect(alice.getByLabel("Funds", { exact: true })).toHaveValue(
+		"2366.67",
+	);
+	await expect(alice.getByLabel("Funds", { exact: true })).toHaveAttribute(
+		"readonly",
+		"",
+	);
+	await alice
+		.getByLabel("Expected take-home income", { exact: true })
+		.fill("5000");
+	await alice.getByLabel("Housing", { exact: true }).fill("2000");
+	await alice
+		.getByLabel("Monthly savings target", { exact: true })
+		.fill("633.33");
+	await saveBudget(alice);
+	await saveBudget(alice);
+	await alice.getByRole("button", { name: "Funds", exact: true }).click();
+	card = alice.getByRole("article").filter({
+		has: alice.getByRole("heading", { name: "Insurance", exact: true }),
+	});
+	await expect(card.locator(".fund-details")).toContainText(
+		"Reserved balance$200.00",
+	);
+	await openMonthly(bob);
+	await expect(bob.getByLabel("Funds", { exact: true })).toHaveValue("2366.67");
+	await bob.getByRole("button", { name: "Funds", exact: true }).click();
+	await bob
+		.getByRole("button", { name: "Edit Insurance", exact: true })
+		.click();
+	const edit = bob.getByRole("dialog", { name: "Edit fund", exact: true });
+	await edit.getByLabel("Payment amount", { exact: true }).fill("900");
+	await edit.getByRole("button", { name: "Save fund", exact: true }).click();
+	await expect(edit).toHaveCount(0);
+	await alice
+		.getByRole("button", { name: "Monthly budget", exact: true })
+		.click();
+	await expect(alice.getByLabel("Funds", { exact: true })).toHaveValue(
+		"2466.67",
+	);
+	await expect(
+		alice.getByRole("button", { name: "Save budget", exact: true }),
+	).toBeDisabled();
+	await alice
+		.getByLabel("Monthly savings target", { exact: true })
+		.fill("533.33");
+	await saveBudget(alice);
+	await alice.reload();
+	await alice.getByLabel("Reporting month").fill(month);
+	await alice.getByRole("button", { name: "Funds", exact: true }).click();
+	await expect(card.locator(".fund-details")).toContainText(
+		"Reserved balance$300.00",
+	);
+	await alice.getByLabel("Reporting month").fill("2099-06");
+	await expect(card.locator(".fund-monthly")).toHaveText(
+		"$300.00required per month",
+	);
+	await expect(card.locator(".fund-details")).toContainText(
+		"Reserved balance$300.00",
+	);
+	await expect(alice.getByRole("checkbox", { name: /pause/i })).toHaveCount(0);
+});
+
+test("linking a purchase to a fund updates its balance and keeps the category budget available", async ({
+	household: { alice },
+}) => {
+	await openMonthly(alice);
+	const card = await addInsuranceFund(alice, "600");
+	await expect(card.locator(".fund-details")).toContainText(
+		"Reserved balance$600.00",
+	);
+	await alice
+		.getByRole("button", { name: "Transactions", exact: true })
+		.click();
+	await alice
+		.getByRole("button", { name: "Add transaction", exact: true })
+		.click();
+	const dialog = alice.getByRole("dialog", { name: "Add a transaction" });
+	await dialog
+		.getByLabel("Description", { exact: true })
+		.fill("Insurance premium");
+	await dialog
+		.getByLabel(
+			"Amount (positive for outflow; negative for income or refund)",
+			{ exact: true },
+		)
+		.fill("600");
+	await dialog
+		.getByLabel("Pay from fund for split 1", { exact: true })
+		.selectOption({ label: "Insurance" });
+	await dialog
+		.getByRole("button", { name: "Save transaction", exact: true })
+		.click();
+	await expect(dialog).toHaveCount(0);
+	await alice.getByRole("button", { name: "Funds", exact: true }).click();
+	await expect(card.locator(".fund-details")).toContainText(
+		"Reserved balance$0.00",
+	);
+	await alice.getByRole("button", { name: "Overview", exact: true }).click();
+	await expect(alice.locator(".category-row").first()).toContainText(
+		"$0.00 of $0.00",
+	);
+	await expect(
+		alice.locator(".summary-card").filter({ hasText: "Money out" }),
+	).toContainText("$600.00");
+});
+
 async function expectReviewReady(page: Page, ready: boolean) {
 	await page
 		.getByRole("button", { name: "Monthly review", exact: true })

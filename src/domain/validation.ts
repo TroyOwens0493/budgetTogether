@@ -52,6 +52,9 @@ export function categoryNameError(
 ): string {
 	return (
 		labelError(value) ||
+		(value.trim().toLowerCase() === "funds"
+			? "Funds is calculated automatically. Add or edit fund goals in the Funds tab."
+			: "") ||
 		(categories.some(
 			(category) =>
 				category._id !== currentId &&

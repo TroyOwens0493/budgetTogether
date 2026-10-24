@@ -22,6 +22,7 @@ import type * as http from "../http.js";
 import type * as model_accounting from "../model/accounting.js";
 import type * as model_bankImport from "../model/bankImport.js";
 import type * as model_categories from "../model/categories.js";
+import type * as model_funds from "../model/funds.js";
 import type * as model_insights from "../model/insights.js";
 import type * as model_personalFunding from "../model/personalFunding.js";
 import type * as model_plans from "../model/plans.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   "model/accounting": typeof model_accounting;
   "model/bankImport": typeof model_bankImport;
   "model/categories": typeof model_categories;
+  "model/funds": typeof model_funds;
   "model/insights": typeof model_insights;
   "model/personalFunding": typeof model_personalFunding;
   "model/plans": typeof model_plans;

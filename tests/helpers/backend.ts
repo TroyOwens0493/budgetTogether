@@ -245,6 +245,7 @@ export const id = <
 		| "transactions"
 		| "connections"
 		| "plans"
+		| "funds"
 		| "contributions"
 		| "bankSyncRuns",
 >(

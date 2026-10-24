@@ -48,6 +48,7 @@ export function evaluatePlanDraft<CategoryId extends string>(
 		fundedByShared: boolean;
 		funds: { incoming: number; outgoing: number; carry: number };
 		revision: number;
+		fundAmount?: number;
 	},
 ) {
 	const expectedIncome = context.fundedByShared
@@ -95,6 +96,7 @@ export function evaluatePlanDraft<CategoryId extends string>(
 				context.funds.incoming,
 				context.funds.outgoing,
 				context.funds.carry,
+				context.fundAmount ?? 0,
 			);
 			plan = parsed;
 			error = "";

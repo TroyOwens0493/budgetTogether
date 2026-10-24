@@ -33,7 +33,10 @@ export function ReviewView({
 			return sum;
 		}
 	}, 0);
-	const available = Math.max(0, data.savings - (data.plan?.savingsTarget ?? 0));
+	const available = Math.max(
+		0,
+		data.unreservedSavings - (data.plan?.savingsTarget ?? 0),
+	);
 	async function submit(e: FormEvent<HTMLFormElement>) {
 		e.preventDefault();
 		if ((data.plan?.revision ?? 0) > revision) return;

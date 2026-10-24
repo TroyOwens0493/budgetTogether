@@ -1,15 +1,18 @@
 import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { createServer } from "vite";
 import { createScenario, deleteScenario, invokeSession } from "./backend";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
+const port = Number(process.env.BUDGET_TASK_PORT ?? 3100);
 const server = await createServer({
 	configFile: false,
 	envDir: false,
 	root,
 	cacheDir: `${root}/node_modules/.vite-budget-tasks`,
 	plugins: [
+		tailwindcss(),
 		react(),
 		{
 			name: "isolated-budget-browser-fixture",
@@ -61,6 +64,6 @@ const server = await createServer({
 			},
 		],
 	},
-	server: { host: "127.0.0.1", port: 3100, strictPort: true },
+	server: { host: "127.0.0.1", port, strictPort: true },
 });
 await server.listen();

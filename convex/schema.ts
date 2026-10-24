@@ -4,6 +4,16 @@ import { removedValidator, txValidator } from "./bankTypes";
 export const split = v.object({
 	categoryId: v.id("categories"),
 	amount: v.number(),
+	fundId: v.optional(v.id("funds")),
+});
+export const fundSchedule = v.object({
+	effectiveMonth: v.string(),
+	name: v.string(),
+	targetAmount: v.number(),
+	targetMonth: v.optional(v.string()),
+	intervalMonths: v.optional(v.number()),
+	monthlyAmount: v.optional(v.number()),
+	createdAt: v.number(),
 });
 export const kind = v.union(
 	v.literal("purchase"),
@@ -126,12 +136,27 @@ export default defineSchema({
 	})
 		.index("by_space", ["spaceId"])
 		.index("by_space_name", ["spaceId", "name"]),
+	funds: defineTable({
+		spaceId: v.id("spaces"),
+		startMonth: v.string(),
+		openingBalance: v.number(),
+		schedules: v.array(fundSchedule),
+		revision: v.number(),
+	}).index("by_space", ["spaceId"]),
 	plans: defineTable({
 		spaceId: v.id("spaces"),
 		month: v.string(),
 		expectedIncome: v.number(),
 		savingsTarget: v.number(),
 		limits: v.array(split),
+		fundAllocations: v.optional(
+			v.array(
+				v.object({
+					fundId: v.id("funds"),
+					amount: v.number(),
+				}),
+			),
+		),
 		saved: v.optional(v.boolean()),
 		// Keep existing records valid while they move to the saved field.
 		status: v.optional(v.union(v.literal("draft"), v.literal("active"))),
@@ -152,12 +177,14 @@ export default defineSchema({
 		suggestedKind: v.optional(kind),
 		note: v.string(),
 		splits: v.array(split),
+		funded: v.optional(v.boolean()),
 		removed: v.boolean(),
 		revision: v.number(),
 		edited: v.boolean(),
 		reconciledWith: v.optional(v.id("transactions")),
 	})
 		.index("by_space_date", ["spaceId", "date"])
+		.index("by_space_funded_date", ["spaceId", "funded", "date"])
 		.index("by_pending_external", ["accountId", "pendingExternalId"])
 		.index("by_external", ["accountId", "externalId"]),
 	personalAllocations: defineTable({

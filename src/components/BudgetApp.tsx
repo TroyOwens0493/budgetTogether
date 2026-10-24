@@ -6,6 +6,7 @@ import {
 	Landmark,
 	LayoutDashboard,
 	LogOut,
+	PiggyBank,
 	Settings,
 } from "lucide-react";
 import { useEffect, useState } from "react";
@@ -14,6 +15,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { authClient } from "../lib/auth-client";
 import { AccountsView } from "./AccountsView";
 import { ErrorBanner } from "./ErrorBanner";
+import { FundsView } from "./FundsView";
 import { OverviewView } from "./OverviewView";
 import { PlanView } from "./PlanView";
 import { ProfileView } from "./ProfileView";
@@ -26,6 +28,7 @@ const nav = [
 	["overview", "Overview", LayoutDashboard],
 	["transactions", "Transactions", ArrowLeftRight],
 	["budget", "Monthly budget", CalendarDays],
+	["funds", "Funds", PiggyBank],
 	["review", "Monthly review", CircleCheck],
 	["accounts", "Accounts & settings", Landmark],
 ] as const;
@@ -198,6 +201,12 @@ export function BudgetApp({ home }: { home: Home }) {
 						/>
 					) : view === "review" ? (
 						<ReviewView key={`${space._id}:${month}`} {...props} data={data} />
+					) : view === "funds" ? (
+						<FundsView
+							key={`${space._id}:${month}`}
+							{...props}
+							data={data.fundPlan}
+						/>
 					) : view === "profile" ? (
 						<ProfileView
 							profile={home.profile!}

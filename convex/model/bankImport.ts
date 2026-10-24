@@ -122,6 +122,7 @@ export async function applyChanges(
 			suggestedKind,
 			note: prior?.note ?? "",
 			splits,
+			funded: splits.some((split) => Boolean(split.fundId)),
 			removed: false,
 			revision: Math.max(old?.revision ?? 0, pending?.revision ?? 0) + 1,
 			edited: prior?.edited ?? false,

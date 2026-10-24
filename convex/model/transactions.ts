@@ -9,6 +9,7 @@ import {
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { access, label, readCutoff } from "../access";
+import { validatePayments } from "./funds";
 
 export async function list(
 	ctx: QueryCtx,
@@ -96,6 +97,7 @@ export async function save(
 		throw new ConvexError("Enter a valid date.");
 	if (args.kind === "purchase") {
 		validateSplits(args.amount, args.splits);
+		await validatePayments(ctx, args.spaceId, args.date, args.splits);
 		for (const s of args.splits)
 			if ((await ctx.db.get(s.categoryId))?.spaceId !== args.spaceId)
 				throw new ConvexError("Choose categories from this budget.");
@@ -135,6 +137,7 @@ export async function save(
 		pending,
 		note: args.note,
 		splits: args.splits,
+		funded: args.splits.some((split) => Boolean(split.fundId)),
 		revision: (old?.revision ?? 0) + 1,
 		edited: true,
 	};
@@ -188,6 +191,7 @@ export async function reconcile(
 		);
 	await access(ctx, manual.spaceId, true);
 	assertRevision(manual.revision, args.revision);
+	await validatePayments(ctx, manual.spaceId, imported.date, manual.splits);
 	if (
 		(await linkedContribution(ctx, manual._id)) ||
 		(await linkedContribution(ctx, imported._id))
@@ -197,6 +201,7 @@ export async function reconcile(
 		kind: manual.kind,
 		note: manual.note,
 		splits: manual.splits,
+		funded: manual.splits.some((split) => Boolean(split.fundId)),
 		edited: true,
 		revision: imported.revision + 1,
 	});

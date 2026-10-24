@@ -62,7 +62,7 @@ export function OverviewView({
 											(sum, x) =>
 												sum +
 												x.splits
-													.filter((s) => s.categoryId === c._id)
+													.filter((s) => s.categoryId === c._id && !s.fundId)
 													.reduce((n, s) => n + s.amount, 0),
 											0,
 										)
@@ -103,6 +103,15 @@ export function OverviewView({
 							</div>
 						);
 					})}
+					{data.fundPlan.items.length > 0 && (
+						<div className="fund-overview-row">
+							<strong>Funds</strong>
+							<span>
+								{usd(data.fundPlan.contributed)} reserved this month ·{" "}
+								{usd(data.fundPlan.total)} required
+							</span>
+						</div>
+					)}
 				</section>
 				<section className="panel">
 					<div className="chart-title">

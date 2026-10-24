@@ -227,6 +227,10 @@ function TransactionEditor({
 	const save = useMutation(api.budgets.saveTransaction);
 	const remove = useMutation(api.budgets.deleteTransaction);
 	const reconcile = useMutation(api.budgets.reconcile);
+	const funds = useQuery(api.budgets.funds, {
+		spaceId,
+		month: entry?.date.slice(0, 7) ?? month,
+	});
 	const [kind, setKind] = useState(entry?.kind ?? "purchase");
 	const [transactionAmount, setTransactionAmount] = useState(
 		entry ? amount(entry.amount) : "",
@@ -236,11 +240,13 @@ function TransactionEditor({
 			key: crypto.randomUUID(),
 			categoryId: String(x.categoryId),
 			amount: amount(x.amount),
+			fundId: x.fundId ?? "",
 		})) ?? [
 			{
 				key: crypto.randomUUID(),
 				categoryId: categories[0]?._id ?? "",
 				amount: "0.00",
+				fundId: "",
 			},
 		],
 	);
@@ -278,8 +284,9 @@ function TransactionEditor({
 					pending: entry?.source === "plaid" ? entry.pending : false,
 					note: String(form.get("note")),
 					splits: allocations.map((split) => ({
-						...split,
+						amount: split.amount,
 						categoryId: split.categoryId as Id<"categories">,
+						...(split.fundId ? { fundId: split.fundId as Id<"funds"> } : {}),
 					})),
 					revision: entry?.revision ?? 0,
 				}),
@@ -370,7 +377,7 @@ function TransactionEditor({
 						<section>
 							<h3>Category splits</h3>
 							{splits.map((s, i) => (
-								<div className="split-row" key={s.key}>
+								<div className="split-row funded-split-row" key={s.key}>
 									<label>
 										<span className="sr-only">Category for split {i + 1}</span>
 										<select
@@ -407,6 +414,29 @@ function TransactionEditor({
 											}
 										/>
 									</label>
+									<label className="split-fund">
+										<span>Pay from fund for split {i + 1}</span>
+										<select
+											value={s.fundId}
+											aria-label={`Pay from fund for split ${i + 1}`}
+											onChange={(event) =>
+												setSplits(
+													splits.map((row, index) =>
+														index === i
+															? { ...row, fundId: event.target.value }
+															: row,
+													),
+												)
+											}
+										>
+											<option value="">Use monthly category budget</option>
+											{funds?.items.map((fund) => (
+												<option key={fund._id} value={fund._id}>
+													{fund.name}
+												</option>
+											))}
+										</select>
+									</label>
 									<button
 										type="button"
 										className="text-button"
@@ -432,6 +462,7 @@ function TransactionEditor({
 											key: crypto.randomUUID(),
 											categoryId: categories[0]?._id ?? "",
 											amount: "0.00",
+											fundId: "",
 										},
 									])
 								}
@@ -443,6 +474,13 @@ function TransactionEditor({
 									? "A single category uses the full transaction amount."
 									: "Split amounts must total the transaction amount, including its sign."}
 							</p>
+							{splits.some((split) => split.fundId) && (
+								<p className="muted">
+									Fund payments reduce the fund’s reserved balance. Refunds add
+									money back. Posted amounts still count in spending reports,
+									but do not use the regular category limit.
+								</p>
+							)}
 						</section>
 					)}
 					<label>

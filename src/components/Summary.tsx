@@ -21,12 +21,19 @@ export function Summary({ data }: { data: Dashboard }) {
 				<span>Saved this month</span>
 				<strong>{usd(data.savings)}</strong>
 				<small>
-					{usd(data.savings - (data.plan?.savingsTarget ?? 0))}{" "}
-					{data.savings >= (data.plan?.savingsTarget ?? 0)
+					{usd(data.unreservedSavings - (data.plan?.savingsTarget ?? 0))}{" "}
+					{data.unreservedSavings >= (data.plan?.savingsTarget ?? 0)
 						? "above"
 						: "relative to"}{" "}
 					your {usd(data.plan?.savingsTarget ?? 0)} target
 				</small>
+				{data.fundPlan.items.length > 0 && (
+					<small>
+						{usd(data.fundPlan.contributed)} reserved for funds ·{" "}
+						{usd(data.unreservedSavings)} left after fund reservations and
+						payments
+					</small>
+				)}
 			</article>
 		</div>
 	);

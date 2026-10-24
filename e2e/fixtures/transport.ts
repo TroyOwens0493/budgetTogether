@@ -36,6 +36,7 @@ export function useQuery<F extends FunctionReference<"query">>(
 		let closed = false;
 		let pending = false;
 		async function refresh() {
+			if (key === '"skip"') return;
 			if (closed || pending) return;
 			pending = true;
 			try {

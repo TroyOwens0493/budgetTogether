@@ -1117,6 +1117,95 @@ dialog::backdrop {
 		flex-wrap: wrap;
 	}
 }
+.funds-heading {
+	margin-bottom: 24px;
+	gap: 16px;
+	flex-wrap: wrap;
+}
+.funds-heading h1 {
+	margin: 0 0 8px;
+	font-size: 30px;
+}
+.funds-heading p {
+	margin: 0;
+}
+.funds-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr));
+	gap: 20px;
+}
+.fund-card h2 {
+	margin: 8px 0 0;
+	overflow-wrap: anywhere;
+}
+.fund-card .section-heading {
+	align-items: flex-start;
+	gap: 16px;
+}
+.fund-monthly {
+	display: flex;
+	align-items: baseline;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 24px 0;
+}
+.fund-monthly strong {
+	font-size: 30px;
+	font-weight: 500;
+}
+.fund-monthly span,
+.fund-details dt,
+.fund-budget-row small {
+	color: var(--muted);
+	font-size: 12px;
+}
+.fund-details {
+	margin: 0;
+}
+.fund-details > div,
+.fund-budget-detail,
+.fund-overview-row {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	padding: 10px 0;
+}
+.fund-details dd {
+	margin: 0;
+}
+.fund-budget-row {
+	padding-bottom: 20px;
+}
+.fund-budget-detail {
+	font-size: 12px;
+	padding: 6px 0;
+}
+.fund-budget-row input[readonly] {
+	background: #f6f7f3;
+	font-weight: 600;
+}
+.fund-overview-row {
+	flex-direction: column;
+	border-top: 1px solid var(--border);
+	margin-top: 16px;
+}
+.fund-overview-row span {
+	font-size: 12px;
+}
+.funds-empty svg {
+	margin: 8px auto 16px;
+}
+.funded-split-row .split-fund {
+	grid-column: 1 / -1;
+	grid-row: 2;
+}
+.funded-split-row .split-fund > span {
+	font-size: 12px;
+}
+.funded-split-row {
+	padding: 12px 0;
+	border-bottom: 1px solid var(--border);
+}
 @media (prefers-reduced-motion: reduce) {
 	* {
 		scroll-behavior: auto !important;

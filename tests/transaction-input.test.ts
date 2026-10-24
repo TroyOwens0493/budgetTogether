@@ -2,6 +2,20 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { parseTransactionAmounts } from "../src/domain/transaction-input.ts";
 
+test("purchase splits keep their fund link and income discards it", () => {
+	const splits = [
+		{ categoryId: "insurance", fundId: "fund-1", amount: "1.00" },
+	];
+	assert.deepEqual(
+		parseTransactionAmounts("purchase", "12.34", splits).data?.splits,
+		[{ categoryId: "insurance", fundId: "fund-1", amount: 1234 }],
+	);
+	assert.deepEqual(
+		parseTransactionAmounts("income", "-12.34", splits).data?.splits,
+		[],
+	);
+});
+
 test("a single category uses the full purchase or refund amount", () => {
 	for (const value of ["12.34", "-12.34", "0.00"]) {
 		const result = parseTransactionAmounts("purchase", value, [

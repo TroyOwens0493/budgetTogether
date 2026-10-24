@@ -22,6 +22,30 @@ const context = {
 	revision: 3,
 };
 
+test("automatic fund amounts reduce the balance without adding an editable spending limit", () => {
+	const draft = createPlanDraft(plan, categories);
+	let result = evaluatePlanDraft(draft, categories, {
+		...context,
+		fundAmount: 1000,
+	});
+	assert.equal(result.balance, -1000);
+	assert.equal(result.canSave, false);
+	draft.savingsTarget = "0.00";
+	result = evaluatePlanDraft(draft, categories, {
+		...context,
+		fundAmount: 1000,
+	});
+	assert.equal(result.balance, 0);
+	assert.equal(result.canSave, true);
+	assert.deepEqual(result.plan?.limits, plan.limits);
+	for (const amount of [-1, 0.5, NaN, Infinity])
+		assert.equal(
+			evaluatePlanDraft(draft, categories, { ...context, fundAmount: amount })
+				.canSave,
+			false,
+		);
+});
+
 test("loading a plan creates exact editable strings for current categories", () => {
 	assert.deepEqual(createPlanDraft(plan, categories), {
 		expectedIncome: "100.00",

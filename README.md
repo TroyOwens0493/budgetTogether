@@ -63,6 +63,18 @@ Resend sends partner invitations and password reset emails. Configure a verified
 - **Draft and activation steps were removed at the user's request**, overriding those steps in the PDF. Users finish a monthly budget and choose **Save budget**. Every save requires a zero balance. A personal allocation change requires both affected budgets to be balanced and saved again.
 - New months start with prior limits for the user to check and save. Monthly review explicitly adds carry-forward to next month's categories or savings target. Repeated reviews replace existing reservations and adjust the destination budget by the difference, including an already saved budget; they do not change historical savings results. Existing records with the former draft/active field stay readable and move to the new saved field when updated.
 
+## Funds
+
+The **Funds** tab plans repeating payments and one-time savings goals. A repeating payment has an amount, a next payment month, and a frequency of 2 to 120 months. A savings goal has a target amount and either a target month or a monthly amount. Each fund can start with money already saved. That opening balance and the start month stay fixed after creation. Fund settings can change from a selected month without changing earlier months. Pause controls are not included.
+
+The monthly budget has one automatic, read-only **Funds** row when funds exist. Its amount is the sum of the contributions needed that month. Calculations include the target month, use saved contributions from earlier months, and round up to whole cents. For example, an empty $600 fund due in three months needs $200 per month. A later six-month cycle needs $100 per month. A missed budget increases the amount needed in the remaining months. A one-time goal stops requiring contributions when it is funded.
+
+Saving a balanced monthly budget reserves each fund's contribution. Saving the same month again replaces its reservations; it does not add them twice. Copying a budget does not reserve money in the next month until that budget is saved. These are budget reservations, not bank deposits or proof of account balances. The app does not move money. Expected income, category limits, the general savings target, fund reservations, and other budget funding must balance together.
+
+Select a fund for a purchase or refund split in **Transactions**. Posted purchases reduce the fund balance, and refunds restore it. Pending imports stay separate. Actual spending reports still include the payment and its category, while the regular category's budget balance excludes the funded part. Fund reservations cannot also be assigned as carry-forward. Bank corrections and reconciliation retain fund links. A negative fund balance is shown without blocking the bank import. Changes in a prior budget or fund settings can require later budgets to be balanced and saved again.
+
+`src/domain/funds.ts` owns the shared monthly calculation. `convex/model/funds.ts` owns access, effective-month settings, and fund summaries. Saved plans store their fund allocations. A separate transaction index reads only entries with fund links when calculating balances. Funds and saved-plan history are still read in full for a budget space and need separate scaling work before large production workloads.
+
 ## API and modules
 
 The PDF's API paths describe conceptual operations. This implementation uses authenticated Convex queries, mutations, and actions. The browser subscribes to queries for shared updates without a page refresh.
@@ -73,6 +85,7 @@ The PDF's API paths describe conceptual operations. This implementation uses aut
 | --- | --- |
 | `spaces.ts` | Profile setup, private-budget creation, and the user's budget list |
 | `categories.ts` | Category lists, edits, and deletion with reassignment |
+| `funds.ts` | Fund settings, monthly requirements, reserved balances, and transaction-link validation |
 | `accounting.ts` | Planned and actual funding, carry-forward funding, and monthly results |
 | `plans.ts` | Monthly plan saves, repetition, initial creation, and reviews |
 | `transactions.ts` | Transaction search, edits, deletion, splits, and reconciliation |

@@ -95,7 +95,7 @@ export async function alerts(
 		.collect();
 	if (
 		leftovers(
-			result.savings,
+			result.unreservedSavings,
 			plan?.savingsTarget ?? 0,
 			reserved.reduce((s, x) => s + x.amount, 0),
 		) < 0

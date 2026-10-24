@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import * as accounts from "../../convex/accounts";
 import { authComponent } from "../../convex/auth";
 import * as budgets from "../../convex/budgets";
 import * as personalAllocations from "../../convex/personalAllocations";
@@ -12,6 +13,11 @@ const handlers = new Map<string, unknown>([
 	["budgets:dashboard", budgets.dashboard],
 	["budgets:ensureMonth", budgets.ensureMonth],
 	["budgets:savePlan", budgets.savePlan],
+	["budgets:funds", budgets.funds],
+	["budgets:saveFund", budgets.saveFund],
+	["budgets:transactions", budgets.transactions],
+	["budgets:saveTransaction", budgets.saveTransaction],
+	["accounts:list", accounts.list],
 	["budgets:repeatPlan", budgets.repeatPlan],
 	["budgets:review", budgets.review],
 	["budgets:alerts", budgets.alerts],
@@ -77,6 +83,15 @@ export async function createScenario() {
 		userId: "bob",
 		active: true,
 		joinedAt: Date.now(),
+	});
+	await scenario.db.insert("accounts", {
+		spaceId: sharedId,
+		userId: "alice",
+		name: "Checking",
+		type: "checking",
+		mask: "1234",
+		active: true,
+		revision: 0,
 	});
 	const id = randomUUID();
 	scenarios.set(id, scenario);
