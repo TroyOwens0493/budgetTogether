@@ -9,8 +9,10 @@ import {
 } from "./_generated/server";
 import {
 	fetchHistoricalReturn,
+	HistoricalDataError,
 	type HoldingsResponse,
 	normalizeHoldings,
+	tiingoSymbol,
 } from "./investmentClient";
 import { applyHoldings } from "./model/investmentImport";
 import { list, tickerSymbol } from "./model/projections";
@@ -42,9 +44,11 @@ export const begin = internalMutation({
 		return {
 			accessToken: c.accessToken,
 			syncAt,
-			accounts: accounts
-				.filter((a) => a.connectionId === c._id && a.investment && a.active)
-				.map((a) => ({ id: a._id, externalId: a.externalId! })),
+			accounts: accounts.flatMap((a) =>
+				a.connectionId === c._id && a.investment && a.active && a.externalId
+					? [{ id: a._id, externalId: a.externalId }]
+					: [],
+			),
 		};
 	},
 });
@@ -153,38 +157,67 @@ export const reserveReturn = internalMutation({
 			.withIndex("by_ticker", (q) => q.eq("ticker", ticker))
 			.unique();
 		const now = Date.now();
-		if (old?.fetchedAt && now - old.fetchedAt < 30 * 86400000) return null;
-		// Failed lookups can retry after a short cooldown, including after the
-		// market-data configuration is repaired. Keep the daily request cap.
 		if (
-			old?.requestedAt &&
-			now - old.requestedAt < (old.error ? 60000 : 86400000)
+			old?.source === "Tiingo" &&
+			!old.error &&
+			old.fetchedAt &&
+			now - old.fetchedAt < 30 * 86400000
 		)
 			return null;
-		const date = new Date(now).toISOString().slice(0, 10);
+		if (
+			old?.requestSource === "Tiingo" &&
+			old?.requestedAt &&
+			now - old.requestedAt < 60000
+		)
+			return null;
+		const date = "tiingo";
 		const budget = await ctx.db
 			.query("returnBudget")
 			.withIndex("by_date", (q) => q.eq("date", date))
 			.unique();
-		if ((budget?.count ?? 0) >= 25) {
-			if (old)
-				await ctx.db.patch(old._id, {
-					error:
-						"The daily historical-data limit was reached. Try again tomorrow or enter a return.",
-				});
-			else
-				await ctx.db.insert("returnHistory", {
-					ticker,
-					error:
-						"The daily historical-data limit was reached. Try again tomorrow or enter a return.",
-				});
+		const requests = (budget?.requests ?? []).filter(
+			(time) => time > now - 86400000,
+		);
+		const symbols = (budget?.symbols ?? []).filter(
+			(entry) => entry.requestedAt > now - 30 * 86400000,
+		);
+		let symbol: string;
+		try {
+			symbol = tiingoSymbol(ticker);
+		} catch {
+			const error =
+				"Check this investment's trading symbol before loading Tiingo history.";
+			if (old) await ctx.db.patch(old._id, { error });
+			else await ctx.db.insert("returnHistory", { ticker, error });
 			return null;
 		}
-		if (budget) await ctx.db.patch(budget._id, { count: budget.count + 1 });
-		else await ctx.db.insert("returnBudget", { date, count: 1 });
+		const knownSymbol = symbols.find((entry) => entry.ticker === symbol);
+		const error =
+			requests.filter((time) => time > now - 3600000).length >= 50
+				? "Tiingo's hourly history limit was reached. Try again after an hour or enter a return."
+				: requests.length >= 1000
+					? "Tiingo's daily history limit was reached. Try again tomorrow or enter a return."
+					: !knownSymbol && symbols.length >= 500
+						? "Tiingo's limit of 500 different symbols per month was reached. Try again later or enter a return."
+						: undefined;
+		if (error) {
+			if (old) await ctx.db.patch(old._id, { error });
+			else await ctx.db.insert("returnHistory", { ticker, error });
+			return null;
+		}
+		requests.push(now);
+		if (knownSymbol) knownSymbol.requestedAt = now;
+		else symbols.push({ ticker: symbol, requestedAt: now });
+		const usage = { date, count: requests.length, requests, symbols };
+		if (budget) await ctx.db.patch(budget._id, usage);
+		else await ctx.db.insert("returnBudget", usage);
 		const id: Id<"returnHistory"> =
 			old?._id ?? (await ctx.db.insert("returnHistory", { ticker }));
-		await ctx.db.patch(id, { requestedAt: now, error: undefined });
+		await ctx.db.patch(id, {
+			requestedAt: now,
+			requestSource: "Tiingo",
+			error: undefined,
+		});
 		return { id, requestedAt: now };
 	},
 });
@@ -199,10 +232,16 @@ export const storeReturn = internalMutation({
 	},
 	handler: async (ctx, args) => {
 		const old = await ctx.db.get(args.id);
-		if (!old || old.requestedAt !== args.requestedAt) return;
+		if (
+			!old ||
+			old.requestSource !== "Tiingo" ||
+			old.requestedAt !== args.requestedAt
+		)
+			return;
 		if (args.error) await ctx.db.patch(old._id, { error: args.error });
 		else
 			await ctx.db.patch(old._id, {
+				source: "Tiingo",
 				rate: args.rate,
 				startDate: args.startDate,
 				endDate: args.endDate,
@@ -231,9 +270,7 @@ export const fetchReturn = internalAction({
 			await ctx.runMutation(internal.investments.storeReturn, {
 				...reservation,
 				error:
-					(error instanceof Error && error.message.startsWith("Historical")) ||
-					(error instanceof Error &&
-						/history|historical|adjusted|symbol/.test(error.message))
+					error instanceof HistoricalDataError
 						? error.message
 						: "Historical return lookup failed. Enter a return or try again later.",
 			});
@@ -262,13 +299,12 @@ export const authorizedTickers = internalQuery({
 		return [
 			...new Set(
 				data.accounts.flatMap((account) =>
-					account.holdings
-						.filter(
-							(holding) =>
-								["stock", "etf", "mutualFund"].includes(holding.type) &&
-								holding.ticker,
-						)
-						.map((holding) => holding.ticker!),
+					account.holdings.flatMap((holding) =>
+						["stock", "etf", "mutualFund"].includes(holding.type) &&
+						holding.ticker
+							? [holding.ticker]
+							: [],
+					),
 				),
 			),
 		];

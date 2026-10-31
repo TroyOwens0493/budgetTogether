@@ -50,6 +50,7 @@ export function ProjectionsView({
 		);
 	if (!data) return <p aria-live="polite">Loading projections…</p>;
 	const forecast = prepareProjection(data);
+	const currentAge = data.settings?.currentAge ?? 0;
 	const final = forecast.points.at(-1);
 	return (
 		<>
@@ -172,7 +173,7 @@ export function ProjectionsView({
 										.filter((p) => p.month % 12 === 0)
 										.map((p) => (
 											<tr key={p.month}>
-												<td>{data.settings!.currentAge + p.month / 12}</td>
+												<td>{currentAge + p.month / 12}</td>
 												<td>{usd(p.cash)}</td>
 												<td>{usd(p.investments)}</td>
 												<td>{usd(p.total)}</td>
@@ -349,9 +350,9 @@ export function ProjectionsView({
 										</small>
 										{holding.history?.rate !== undefined && (
 											<small>
-												Tiingo · {holding.history.startDate} to{" "}
-												{holding.history.endDate} ·{" "}
-												{holding.history.rate.toFixed(2)}% annualized
+												{holding.history.source ?? "Alpha Vantage"} ·{" "}
+												{holding.history.startDate} to {holding.history.endDate}{" "}
+												· {holding.history.rate.toFixed(2)}% annualized
 												{holding.history.fetchedAt
 													? ` · Retrieved ${new Date(holding.history.fetchedAt).toLocaleDateString()}`
 													: ""}

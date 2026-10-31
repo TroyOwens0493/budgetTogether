@@ -42,6 +42,14 @@ reload, next-month requirements, and linking a purchase to a fund. These tests
 use the real fund calculations and handlers with the isolated database. They do
 not change any connected Convex deployment or call a bank.
 
+Projection tests use the real app stylesheet and existing Tailwind Vite plugin.
+They cover saved age settings, target allocation, reload, chart sliders, bond
+maturity proceeds, and mobile overflow. Desktop and mobile PNGs are written to
+the test's output directory for visual checks. External Plaid and Tiingo
+calls remain disabled in the browser fixture. Node tests mock those HTTP
+contracts and check holdings imports, retries, privacy, revisions, return
+overrides, historical growth, and bond/CD cash flows.
+
 The test server binds only to `127.0.0.1`, does not read environment files, and is
 never part of the app server or build. Each test deletes its household and closes
 its contexts in teardown. Server shutdown removes any state left by an interrupted

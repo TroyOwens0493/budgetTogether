@@ -18,9 +18,10 @@ export function today(timeZone: string) {
 		month: "2-digit",
 		day: "2-digit",
 	}).formatToParts(new Date());
-	return ["year", "month", "day"]
-		.map((part) => parts.find((entry) => entry.type === part)!.value)
-		.join("-");
+	const values = Object.fromEntries(
+		parts.map((part) => [part.type, part.value]),
+	);
+	return `${values.year}-${values.month}-${values.day}`;
 }
 
 export function tickerSymbol(value: string) {
@@ -76,12 +77,11 @@ export async function list(ctx: QueryCtx, spaceId: Id<"spaces">) {
 						holdings
 							.filter((h) => h.active)
 							.map(async (holding) => {
-								const history = holding.ticker
+								const ticker = holding.ticker;
+								const history = ticker
 									? await ctx.db
 											.query("returnHistory")
-											.withIndex("by_ticker", (q) =>
-												q.eq("ticker", holding.ticker!),
-											)
+											.withIndex("by_ticker", (q) => q.eq("ticker", ticker))
 											.unique()
 									: null;
 								return { ...holding, history };
@@ -171,7 +171,7 @@ function checkFixed(value: typeof fixedIncome.type | undefined) {
 }
 
 export async function saveHolding(ctx: MutationCtx, args: HoldingInput) {
-	await access(ctx, args.spaceId, true);
+	const { current, space } = await access(ctx, args.spaceId, true);
 	money(args.balance);
 	money(args.monthlyContribution, true);
 	if (args.annualReturnOverride !== undefined)
@@ -199,7 +199,7 @@ export async function saveHolding(ctx: MutationCtx, args: HoldingInput) {
 		)
 			throw new ConvexError("Select a supported account type.");
 		accountId = await ctx.db.insert("accounts", {
-			userId: (await access(ctx, args.spaceId, true)).current._id,
+			userId: current._id,
 			spaceId: args.spaceId,
 			name: label(args.accountName),
 			type: args.accountType,
@@ -233,7 +233,8 @@ export async function saveHolding(ctx: MutationCtx, args: HoldingInput) {
 		throw new ConvexError(
 			"Linked values come from the provider. Edit only forecast assumptions.",
 		);
-	const type = linked ? old!.type : args.type;
+	const imported = linked ? old : null;
+	const type = imported?.type ?? args.type;
 	if (type === "unsupported" && !args.excluded)
 		throw new ConvexError("This holding type cannot be included.");
 	const contribution =
@@ -254,15 +255,13 @@ export async function saveHolding(ctx: MutationCtx, args: HoldingInput) {
 			);
 	}
 	const value = {
-		accountId: accountId!,
-		name: linked ? old!.name : label(args.name),
+		accountId,
+		name: imported ? imported.name : label(args.name),
 		type,
-		ticker: linked ? old!.ticker : tickerSymbol(args.ticker),
-		balance: linked ? old!.balance : args.balance,
-		currency: linked ? old!.currency : "USD",
-		asOf: linked
-			? old!.asOf
-			: today((await access(ctx, args.spaceId)).space.timeZone),
+		ticker: imported ? imported.ticker : tickerSymbol(args.ticker),
+		balance: imported ? imported.balance : args.balance,
+		currency: imported ? imported.currency : "USD",
+		asOf: imported ? imported.asOf : today(space.timeZone),
 		annualReturnOverride: args.annualReturnOverride,
 		monthlyContribution: args.monthlyContribution,
 		excluded: args.excluded,

@@ -29,6 +29,17 @@ export type HoldingsResponse = {
 	}[];
 };
 
+export class HistoricalDataError extends Error {}
+
+export function tiingoSymbol(value: string) {
+	const symbol = value.trim().toUpperCase().replaceAll(".", "-");
+	if (!/^[A-Z0-9][A-Z0-9-]{0,29}$/.test(symbol))
+		throw new HistoricalDataError(
+			"Check this investment's trading symbol before loading Tiingo history.",
+		);
+	return symbol;
+}
+
 export function normalizeHoldings(data: HoldingsResponse) {
 	return data.accounts
 		.filter((account) => account.type === "investment")
@@ -106,58 +117,84 @@ export function normalizeHoldings(data: HoldingsResponse) {
 }
 
 export async function fetchHistoricalReturn(ticker: string) {
-	const key = process.env.TIINGO_API_TOKEN;
+	const key = process.env.TIINGO_API_TOKEN?.trim();
 	if (!key)
-		throw new Error(
-			"Historical returns are unavailable until the market-data service is configured. Enter your own annual return.",
+		throw new HistoricalDataError(
+			"Historical returns need a Tiingo API token. Set up Tiingo or enter your own annual return.",
 		);
-	const asOf = new Date();
-	const start = new Date(asOf);
-	// Include an observation before the ten-year anniversary for monthly data.
-	start.setUTCFullYear(start.getUTCFullYear() - 11);
+	const asOf = new Date().toISOString().slice(0, 10);
+	const from = new Date(`${asOf}T00:00:00Z`);
+	from.setUTCFullYear(from.getUTCFullYear() - 10);
+	// Include a buffer before the anniversary so the CAGR can use a real
+	// month-end observation at least ten years before the latest sample.
+	from.setUTCMonth(from.getUTCMonth() - 2);
 	const url = new URL(
-		`https://api.tiingo.com/tiingo/daily/${encodeURIComponent(ticker.replaceAll(".", "-"))}/prices`,
+		`https://api.tiingo.com/tiingo/daily/${encodeURIComponent(tiingoSymbol(ticker))}/prices`,
 	);
 	url.search = new URLSearchParams({
-		startDate: start.toISOString().slice(0, 10),
-		endDate: asOf.toISOString().slice(0, 10),
+		startDate: from.toISOString().slice(0, 10),
+		endDate: asOf,
 		resampleFreq: "monthly",
 		format: "json",
 	}).toString();
 	const response = await fetch(url, {
-		headers: { Authorization: `Token ${key}` },
+		headers: { Authorization: `Token ${key}`, Accept: "application/json" },
 		signal: AbortSignal.timeout(20000),
 	});
+	if (response.status === 401 || response.status === 403)
+		throw new HistoricalDataError(
+			"Tiingo could not authorize this history request. Check the API token and data access, or enter a return.",
+		);
 	if (response.status === 429)
-		throw new Error(
-			"The historical-price service reached its limit. Enter a return or try again later.",
+		throw new HistoricalDataError(
+			"Tiingo's request limit was reached. Try again later or enter a return.",
+		);
+	if (response.status === 404)
+		throw new HistoricalDataError(
+			"Tiingo has no price history for this symbol. Check its symbol or enter a return.",
 		);
 	if (!response.ok)
-		throw new Error(
-			"The historical-price service is unavailable. Try again later.",
+		throw new HistoricalDataError(
+			"Tiingo's historical-price service is unavailable. Try again later.",
 		);
-	const series: unknown = await response.json();
+	let series: unknown;
+	try {
+		series = await response.json();
+	} catch {
+		throw new HistoricalDataError(
+			"Tiingo returned invalid price history. Try again later or enter a return.",
+		);
+	}
 	if (!Array.isArray(series) || !series.length)
-		throw new Error(
-			"No adjusted price history was found for this symbol. Check its symbol or enter a return.",
+		throw new HistoricalDataError(
+			"Tiingo has no adjusted price history for this symbol. Check its symbol or enter a return.",
 		);
-	// Never expose the provider's raw errors: they may contain request details.
-	return historicalReturn(
-		series.map((row: unknown) => {
-			if (
-				!row ||
-				typeof row !== "object" ||
-				!("date" in row) ||
-				typeof row.date !== "string" ||
-				!("adjClose" in row) ||
-				typeof row.adjClose !== "number"
-			)
-				throw new Error(
-					"Historical adjusted prices are unavailable for this symbol.",
-				);
-			return { date: row.date.slice(0, 10), adjustedClose: row.adjClose };
-		}),
-		10,
-		asOf.toISOString().slice(0, 10),
-	);
+	// Use only adjusted closing prices. Raw closes omit distributions and can
+	// give a false return across stock splits. Never expose raw provider errors.
+	try {
+		return historicalReturn(
+			series.map((row: unknown) => {
+				if (
+					!row ||
+					typeof row !== "object" ||
+					!("date" in row) ||
+					typeof row.date !== "string" ||
+					!("adjClose" in row) ||
+					typeof row.adjClose !== "number"
+				)
+					throw new Error(
+						"Tiingo did not supply valid adjusted prices. Enter a return or try again later.",
+					);
+				return { date: row.date.slice(0, 10), adjustedClose: row.adjClose };
+			}),
+			10,
+			asOf,
+		);
+	} catch (error) {
+		throw new HistoricalDataError(
+			error instanceof Error
+				? error.message
+				: "Historical return calculation failed.",
+		);
+	}
 }

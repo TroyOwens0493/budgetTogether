@@ -5,6 +5,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { cents } from "../domain/budget";
 import { annualReturn } from "../domain/projections";
 import { labelError } from "../domain/validation";
+import { ErrorBanner } from "./ErrorBanner";
 import {
 	effectiveFixed,
 	type Holding,
@@ -15,6 +16,22 @@ import {
 import { Modal, MoneyInput } from "./ui";
 import { ValidatedInput } from "./ValidatedInput";
 import type { Run } from "./view-types";
+
+function useEditorError() {
+	const [error, setError] = useState("");
+	async function capture<T>(work: () => Promise<T>): Promise<T> {
+		setError("");
+		try {
+			return await work();
+		} catch (error) {
+			setError(
+				error instanceof Error ? error.message : "The save failed. Try again.",
+			);
+			throw error;
+		}
+	}
+	return { error, capture, dismiss: () => setError("") };
+}
 
 function RateInput({
 	label,
@@ -70,11 +87,15 @@ export function ProjectionSettingsEditor({
 	run: Run;
 	close: () => void;
 }) {
-	const save = useMutation(api.projections.saveSettings);
+	const mutation = useMutation(api.projections.saveSettings);
+	const { error, capture, dismiss } = useEditorError();
+	const save = (args: Parameters<typeof mutation>[0]) =>
+		capture(() => mutation(args));
 	const [pending, setPending] = useState(false);
 	const settings = data.settings;
 	return (
 		<Modal title="Forecast settings" onClose={() => !pending && close()}>
+			{error && <ErrorBanner message={error} onDismiss={dismiss} />}
 			<form
 				onSubmit={async (event) => {
 					event.preventDefault();
@@ -178,7 +199,10 @@ export function HoldingEditor({
 	close: () => void;
 }) {
 	const inputId = useId();
-	const save = useMutation(api.projections.saveHolding);
+	const mutation = useMutation(api.projections.saveHolding);
+	const { error, capture, dismiss } = useEditorError();
+	const save = (args: Parameters<typeof mutation>[0]) =>
+		capture(() => mutation(args));
 	const [type, setType] = useState<Holding["type"]>(holding?.type ?? "etf");
 	const [selectedAccount, setSelectedAccount] = useState(account?._id ?? "new");
 	const [pending, setPending] = useState(false);
@@ -190,6 +214,7 @@ export function HoldingEditor({
 			title={holding ? "Edit investment forecast" : "Add investment"}
 			onClose={() => !pending && close()}
 		>
+			{error && <ErrorBanner message={error} onDismiss={dismiss} />}
 			<form
 				onSubmit={async (event) => {
 					event.preventDefault();

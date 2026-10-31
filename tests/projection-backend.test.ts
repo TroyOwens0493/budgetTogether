@@ -9,9 +9,11 @@ import {
 } from "../convex/investmentClient.ts";
 import * as investments from "../convex/investments.ts";
 import { today } from "../convex/model/projections.ts";
+import { encrypt, selectAccount } from "../convex/plaidClient.ts";
 import * as projections from "../convex/projections.ts";
 import * as sharing from "../convex/sharing.ts";
 import { prepareProjection } from "../src/components/projection-data.ts";
+import { addMonths } from "../src/domain/projections.ts";
 import { fixture, id, invoke } from "./helpers/backend.ts";
 
 async function forecastFixture() {
@@ -71,6 +73,91 @@ test("the current savings target funds cash and investments once, using saved as
 			}),
 		/cannot exceed/,
 	);
+});
+
+test("historical rates fill missing assumptions, overrides take priority, and smaller budgets block overfunded forecasts", async () => {
+	const { db, privateId } = await forecastFixture();
+	await invoke(projections.saveHolding, db, {
+		...input,
+		spaceId: privateId,
+		annualReturnOverride: undefined,
+	});
+	let data = await invoke(projections.list, db, { spaceId: privateId });
+	assert.match(prepareProjection(data).errors.join(" "), /annual return/);
+	await db.insert("returnHistory", {
+		ticker: "VTI",
+		rate: 5,
+		startDate: "2015-01-01",
+		endDate: "2025-01-01",
+		fetchedAt: Date.now(),
+	});
+	data = await invoke(projections.list, db, { spaceId: privateId });
+	assert.deepEqual(prepareProjection(data).errors, []);
+	assert.ok(prepareProjection(data).points[12].investments > 580000);
+	const holding = data.accounts.flatMap((a) => a.holdings)[0];
+	await invoke(projections.saveHolding, db, {
+		...input,
+		spaceId: privateId,
+		id: holding._id,
+		revision: holding.revision,
+	});
+	data = await invoke(projections.list, db, { spaceId: privateId });
+	assert.equal(prepareProjection(data).points[12].investments, 580000);
+	await invoke(budgets.savePlan, db, {
+		spaceId: privateId,
+		month: data.month,
+		expectedIncome: 10000,
+		savingsTarget: 10000,
+		limits: [],
+		revision: 1,
+	});
+	const smaller = prepareProjection(
+		await invoke(projections.list, db, { spaceId: privateId }),
+	);
+	assert.equal(smaller.points.length, 0);
+	assert.match(smaller.errors.join(" "), /exceed/);
+	await invoke(projections.saveHolding, db, {
+		...input,
+		spaceId: privateId,
+		id: holding._id,
+		revision: holding.revision + 1,
+		monthlyContribution: 10000,
+	});
+	assert.deepEqual(
+		prepareProjection(
+			await invoke(projections.list, db, { spaceId: privateId }),
+		).errors,
+		[],
+	);
+});
+
+test("a CD needs an explicit yield and maturity date before it can be forecast", async () => {
+	const { db, privateId } = await forecastFixture();
+	await invoke(projections.saveHolding, db, {
+		...input,
+		spaceId: privateId,
+		type: "cd",
+		ticker: "",
+		annualReturnOverride: undefined,
+		monthlyContribution: 0,
+	});
+	let data = await invoke(projections.list, db, { spaceId: privateId });
+	assert.equal(prepareProjection(data).points.length, 0);
+	const holding = data.accounts.flatMap((a) => a.holdings)[0];
+	await invoke(projections.saveHolding, db, {
+		...input,
+		spaceId: privateId,
+		id: holding._id,
+		type: "cd",
+		ticker: "",
+		annualReturnOverride: 4,
+		monthlyContribution: 0,
+		fixedIncome: { maturityDate: addMonths(data.startsOn, 12) },
+		revision: holding.revision,
+	});
+	data = await invoke(projections.list, db, { spaceId: privateId });
+	assert.deepEqual(prepareProjection(data).errors, []);
+	assert.equal(prepareProjection(data).points[12].investments, 0);
 });
 
 test("manual holdings and settings require budget access and current revisions", async () => {
@@ -385,57 +472,409 @@ test("normalization supports selected types and marks unsupported, missing, and 
 	assert.match(data[0].holdings[6].problem ?? "", /value/);
 });
 
-test("historical requests use adjusted monthly prices and never expose provider error details", async (context) => {
+test("Tiingo requests adjusted monthly prices with header authentication and share-class symbols", async (context) => {
+	const previous = process.env.TIINGO_API_TOKEN;
+	process.env.TIINGO_API_TOKEN = "test-token";
+	const endDate = new Date().toISOString().slice(0, 10);
+	const startDate = addMonths(endDate, -120);
 	context.mock.method(
 		globalThis,
 		"fetch",
-		async (url: URL | string, init: RequestInit) => {
-			const request = new URL(String(url));
-			assert.equal(request.origin, "https://api.tiingo.com");
-			assert.equal(request.pathname, "/tiingo/daily/BRK-B/prices");
-			assert.equal(request.searchParams.get("resampleFreq"), "monthly");
+		async (input: URL | string, init?: RequestInit) => {
+			const url = new URL(String(input));
+			assert.equal(url.origin, "https://api.tiingo.com");
+			assert.equal(url.pathname, "/tiingo/daily/BRK-B/prices");
+			assert.equal(url.searchParams.get("resampleFreq"), "monthly");
+			assert.equal(url.searchParams.get("format"), "json");
+			assert.equal(url.searchParams.get("endDate"), endDate);
+			assert.ok(String(url.searchParams.get("startDate")) < startDate);
+			assert.equal(url.searchParams.has("token"), false);
 			assert.equal(
-				new Headers(init.headers).get("Authorization"),
-				"Token test-key",
-			);
-			assert.equal(request.searchParams.has("token"), false);
-			assert.equal(
-				Number(request.searchParams.get("startDate")?.slice(0, 4)),
-				new Date().getUTCFullYear() - 11,
+				new Headers(init?.headers).get("Authorization"),
+				"Token test-token",
 			);
 			return new Response(
 				JSON.stringify([
-					{ date: "2015-01-30T00:00:00.000Z", adjClose: 100, close: 50 },
-					{ date: "2025-01-31T00:00:00.000Z", adjClose: 200, close: 500 },
+					{ date: `${startDate}T00:00:00.000Z`, adjClose: 100, close: 1000 },
+					{ date: `${endDate}T00:00:00.000Z`, adjClose: 200, close: 1000 },
 				]),
 			);
 		},
 	);
-	const previous = process.env.TIINGO_API_TOKEN;
-	process.env.TIINGO_API_TOKEN = "test-key";
 	try {
 		const result = await fetchHistoricalReturn("BRK.B");
 		assert.ok(Math.abs(result.rate - 7.177) < 0.02);
-		assert.equal(result.startDate, "2015-01-30");
-		assert.equal(result.endDate, "2025-01-31");
-		context.mock.method(
-			globalThis,
-			"fetch",
-			async () =>
-				new Response(
-					JSON.stringify({ Information: "secret-provider-request-details" }),
-					{ status: 429 },
-				),
-		);
+		assert.equal(result.startDate, startDate);
+		assert.equal(result.endDate, endDate);
+	} finally {
+		if (previous === undefined) delete process.env.TIINGO_API_TOKEN;
+		else process.env.TIINGO_API_TOKEN = previous;
+	}
+});
+
+test("Tiingo errors, missing adjusted prices, and invalid JSON never expose raw responses", async (context) => {
+	const previous = process.env.TIINGO_API_TOKEN;
+	process.env.TIINGO_API_TOKEN = "test-token";
+	try {
+		for (const [status, message] of [
+			[401, /authorize/],
+			[403, /authorize/],
+			[404, /no price history/],
+			[429, /limit/],
+			[500, /unavailable/],
+		] as const) {
+			context.mock.method(
+				globalThis,
+				"fetch",
+				async () =>
+					new Response("private-provider-request-details", { status }),
+			);
+			await assert.rejects(
+				() => fetchHistoricalReturn("IBM"),
+				(error: Error) =>
+					message.test(error.message) &&
+					!error.message.includes("private-provider"),
+			);
+		}
+		for (const body of [
+			"private-provider-invalid-json",
+			JSON.stringify({ detail: "private-provider-details" }),
+			"[]",
+			JSON.stringify([{ date: "2025-01-31", close: 100 }]),
+		]) {
+			context.mock.method(globalThis, "fetch", async () => new Response(body));
+			await assert.rejects(
+				() => fetchHistoricalReturn("IBM"),
+				(error: Error) =>
+					/history|adjusted prices/.test(error.message) &&
+					!error.message.includes("private-provider"),
+			);
+		}
+		delete process.env.TIINGO_API_TOKEN;
 		await assert.rejects(
 			() => fetchHistoricalReturn("IBM"),
-			(error: Error) =>
-				/limit/.test(error.message) &&
-				!error.message.includes("secret-provider"),
+			/Tiingo API token/,
 		);
 	} finally {
 		if (previous === undefined) delete process.env.TIINGO_API_TOKEN;
 		else process.env.TIINGO_API_TOKEN = previous;
+	}
+});
+
+test("Tiingo cache prevents duplicate work, records the source, and caps hourly requests", async () => {
+	const { db } = await fixture();
+	const first = await invoke(investments.reserveReturn, db, { ticker: "IBM" });
+	assert.ok(first);
+	assert.equal(
+		await invoke(investments.reserveReturn, db, { ticker: "IBM" }),
+		null,
+	);
+	await invoke(investments.storeReturn, db, {
+		...first,
+		rate: 5,
+		startDate: "2015-01-01",
+		endDate: "2025-01-01",
+	});
+	assert.equal((await db.get(first.id))?.source, "Tiingo");
+	assert.equal(
+		await invoke(investments.reserveReturn, db, { ticker: "IBM" }),
+		null,
+	);
+	for (let i = 0; i < 49; i++)
+		assert.ok(
+			await invoke(investments.reserveReturn, db, { ticker: `FUND${i}` }),
+		);
+	assert.equal(
+		await invoke(investments.reserveReturn, db, { ticker: "EXTRA" }),
+		null,
+	);
+	const budget = [...db.rows.values()].find((row) => row.date === "tiingo");
+	assert.equal(budget?.count, 50);
+	const blocked = [...db.rows.values()].find((row) => row.ticker === "EXTRA");
+	assert.match(String(blocked?.error), /hourly/);
+	assert.ok(budget);
+	await db.patch(budget._id, {
+		requests: Array(50).fill(Date.now() - 3600001),
+	});
+	assert.ok(await invoke(investments.reserveReturn, db, { ticker: "EXTRA" }));
+});
+
+test("Tiingo usage limits track rolling days and different symbols over thirty days", async () => {
+	const { db } = await fixture();
+	const now = Date.now();
+	const budgetId = await db.insert("returnBudget", {
+		date: "tiingo",
+		count: 1000,
+		requests: Array(1000).fill(now - 2 * 3600000),
+		symbols: [],
+	});
+	assert.equal(
+		await invoke(investments.reserveReturn, db, { ticker: "IBM" }),
+		null,
+	);
+	assert.match(
+		String([...db.rows.values()].find((row) => row.ticker === "IBM")?.error),
+		/daily/,
+	);
+	await db.patch(budgetId, {
+		requests: [now - 86400001],
+		symbols: Array.from({ length: 500 }, (_, i) => ({
+			ticker: `FUND${i}`,
+			requestedAt: now,
+		})),
+	});
+	assert.equal(
+		await invoke(investments.reserveReturn, db, { ticker: "IBM" }),
+		null,
+	);
+	assert.match(
+		String([...db.rows.values()].find((row) => row.ticker === "IBM")?.error),
+		/500 different/,
+	);
+	assert.ok(await invoke(investments.reserveReturn, db, { ticker: "FUND0" }));
+	await db.patch(budgetId, {
+		symbols: [{ ticker: "OLD", requestedAt: now - 31 * 86400000 }],
+	});
+	assert.ok(await invoke(investments.reserveReturn, db, { ticker: "IBM" }));
+	const usage = await db.get(budgetId);
+	assert.equal((usage?.symbols as unknown[]).length, 1);
+});
+
+test("saved legacy returns stay attributed to their provider until Tiingo succeeds", async () => {
+	const { db } = await fixture();
+	const id = await db.insert("returnHistory", {
+		ticker: "IBM",
+		rate: 7,
+		startDate: "2015-01-01",
+		endDate: "2025-01-01",
+		fetchedAt: Date.now(),
+		requestedAt: Date.now(),
+	});
+	const reservation = await invoke(investments.reserveReturn, db, {
+		ticker: "IBM",
+	});
+	assert.ok(reservation);
+	await invoke(investments.storeReturn, db, {
+		...reservation,
+		error: "Tiingo is unavailable.",
+	});
+	assert.equal((await db.get(id))?.rate, 7);
+	assert.equal((await db.get(id))?.source, undefined);
+	await db.patch(id, { requestedAt: reservation.requestedAt - 1 });
+	await invoke(investments.storeReturn, db, { ...reservation, rate: 1 });
+	assert.equal((await db.get(id))?.rate, 7);
+	await db.patch(id, { requestedAt: Date.now() - 60001 });
+	const retry = await invoke(investments.reserveReturn, db, { ticker: "IBM" });
+	assert.ok(retry);
+	await invoke(investments.storeReturn, db, {
+		...retry,
+		rate: 6,
+		startDate: "2016-01-01",
+		endDate: "2026-01-01",
+	});
+	assert.equal((await db.get(id))?.source, "Tiingo");
+	assert.equal((await db.get(id))?.rate, 6);
+});
+
+test("investment linking requests Investments and accepts only investment accounts with selected balance fields", async (context) => {
+	const { db } = await fixture();
+	const previous = {
+		client: process.env.PLAID_CLIENT_ID,
+		secret: process.env.PLAID_SECRET,
+		encryption: process.env.PLAID_TOKEN_ENCRYPTION_KEY,
+	};
+	process.env.PLAID_CLIENT_ID = "test-client";
+	process.env.PLAID_SECRET = "test-secret";
+	process.env.PLAID_TOKEN_ENCRYPTION_KEY = btoa("1".repeat(32));
+	const responses: Record<string, unknown> = {
+		"/link/token/create": { link_token: "test-link" },
+		"/item/public_token/exchange": {
+			access_token: "test-token",
+			item_id: "linked-investment",
+		},
+		"/accounts/get": {
+			accounts: [
+				{
+					account_id: "brokerage",
+					name: "SoFi brokerage",
+					type: "investment",
+					subtype: "brokerage",
+					mask: "4321",
+					balances: {
+						current: 1234.56,
+						available: 100,
+						limit: null,
+						iso_currency_code: "USD",
+						last_updated_datetime: "2026-10-24T00:00:00Z",
+					},
+				},
+				{
+					account_id: "checking",
+					name: "Checking",
+					type: "depository",
+					subtype: "checking",
+					mask: "0000",
+				},
+			],
+		},
+		"/item/get": { item: { institution_id: "sofi" } },
+		"/institutions/get_by_id": { institution: { name: "SoFi" } },
+	};
+	context.mock.method(
+		globalThis,
+		"fetch",
+		async (input: string | URL | Request, init?: RequestInit) => {
+			const path = new URL(String(input)).pathname;
+			const body = JSON.parse(String(init?.body));
+			if (path === "/link/token/create") {
+				assert.deepEqual(body.products, ["investments"]);
+				assert.equal(body.account_filters, undefined);
+			}
+			assert.ok(responses[path], `Unexpected endpoint: ${path}`);
+			return new Response(JSON.stringify(responses[path]));
+		},
+	);
+	try {
+		assert.equal(
+			await invoke(bank.link, db, { investments: true }),
+			"test-link",
+		);
+		const connectionId = await invoke(bank.exchange, db, {
+			publicToken: "public-test",
+			investments: true,
+		});
+		assert.equal((await db.get(connectionId))?.product, "investments");
+		const accounts = [...db.rows.values()].filter(
+			(row) => row.connectionId === connectionId,
+		);
+		assert.equal(accounts.length, 1);
+		assert.equal(accounts[0].investment, true);
+		assert.equal(accounts[0].balance, 123456);
+		const raw = (
+			responses["/accounts/get"] as {
+				accounts: Parameters<typeof selectAccount>[0][];
+			}
+		).accounts[0];
+		assert.deepEqual(Object.keys(selectAccount(raw).balances ?? {}).sort(), [
+			"current",
+			"iso_currency_code",
+			"unofficial_currency_code",
+		]);
+	} finally {
+		for (const [name, value] of Object.entries({
+			PLAID_CLIENT_ID: previous.client,
+			PLAID_SECRET: previous.secret,
+			PLAID_TOKEN_ENCRYPTION_KEY: previous.encryption,
+		})) {
+			if (value === undefined) delete process.env[name];
+			else process.env[name] = value;
+		}
+	}
+});
+
+test("bank sync routes Investments through holdings, retains failed imports, and never creates budget transactions", async (context) => {
+	const { db, privateId, connectionId, investmentAccountId } =
+		await linkedFixture();
+	const previous = {
+		client: process.env.PLAID_CLIENT_ID,
+		secret: process.env.PLAID_SECRET,
+		encryption: process.env.PLAID_TOKEN_ENCRYPTION_KEY,
+	};
+	process.env.PLAID_CLIENT_ID = "test-client";
+	process.env.PLAID_SECRET = "test-secret";
+	process.env.PLAID_TOKEN_ENCRYPTION_KEY = btoa("2".repeat(32));
+	await db.patch(connectionId, {
+		accessToken: await encrypt("investment-token"),
+		investmentSyncAt: undefined,
+	});
+	let failing = false;
+	context.mock.method(
+		globalThis,
+		"fetch",
+		async (url: string | URL | Request, init?: RequestInit) => {
+			assert.equal(new URL(String(url)).pathname, "/investments/holdings/get");
+			const body = JSON.parse(String(init?.body));
+			assert.deepEqual(body.options.account_ids, ["ira"]);
+			assert.equal(body.access_token, "investment-token");
+			if (failing)
+				return new Response(
+					JSON.stringify({ error_code: "ITEM_LOGIN_REQUIRED" }),
+					{ status: 400 },
+				);
+			return new Response(
+				JSON.stringify({
+					accounts: [
+						{
+							account_id: "ira",
+							name: "SoFi IRA",
+							type: "investment",
+							subtype: "ira",
+							mask: "1234",
+							balances: { current: 1000, iso_currency_code: "USD" },
+						},
+					],
+					holdings: [
+						{
+							account_id: "ira",
+							security_id: "security-1",
+							institution_value: 1000,
+							quantity: 2,
+							iso_currency_code: "USD",
+						},
+					],
+					securities: [
+						{
+							security_id: "security-1",
+							name: "Imported stock",
+							type: "equity",
+							ticker_symbol: "IBM",
+						},
+					],
+				}),
+			);
+		},
+	);
+	try {
+		await invoke(bank.sync, db, { id: connectionId });
+		assert.equal((await db.get(connectionId))?.status, "connected");
+		assert.equal((await db.get(investmentAccountId))?.balance, 100000);
+		assert.equal(
+			(
+				await invoke(projections.list, db, { spaceId: privateId })
+			).accounts.flatMap((a) => a.holdings).length,
+			1,
+		);
+		assert.equal(
+			[...db.rows.values()].some((row) => row._id.startsWith("transactions:")),
+			false,
+		);
+		failing = true;
+		await assert.rejects(
+			() => invoke(bank.sync, db, { id: connectionId }),
+			/sync failed/,
+		);
+		assert.equal((await db.get(connectionId))?.status, "reconnect");
+		assert.equal(
+			(
+				await invoke(projections.list, db, { spaceId: privateId })
+			).accounts.flatMap((a) => a.holdings).length,
+			1,
+		);
+		db.current = "bob";
+		await invoke(budgets.setup, db, { name: "Bob", timeZone: "UTC" });
+		await assert.rejects(
+			() => invoke(bank.sync, db, { id: connectionId }),
+			/not found/,
+		);
+	} finally {
+		for (const [name, value] of Object.entries({
+			PLAID_CLIENT_ID: previous.client,
+			PLAID_SECRET: previous.secret,
+			PLAID_TOKEN_ENCRYPTION_KEY: previous.encryption,
+		})) {
+			if (value === undefined) delete process.env[name];
+			else process.env[name] = value;
+		}
 	}
 });
 
@@ -487,38 +926,6 @@ test("loaded historical prices feed budget-funded forecasts through the return c
 		if (previous === undefined) delete process.env.TIINGO_API_TOKEN;
 		else process.env.TIINGO_API_TOKEN = previous;
 	}
-});
-
-test("return cache reservations prevent duplicate work and bound daily requests", async () => {
-	const { db } = await fixture();
-	const first = await invoke(investments.reserveReturn, db, { ticker: "IBM" });
-	assert.ok(first);
-	assert.equal(
-		await invoke(investments.reserveReturn, db, { ticker: "IBM" }),
-		null,
-	);
-	await invoke(investments.storeReturn, db, {
-		...first,
-		rate: 5,
-		startDate: "2015-01-01",
-		endDate: "2025-01-01",
-	});
-	assert.equal(
-		await invoke(investments.reserveReturn, db, { ticker: "IBM" }),
-		null,
-	);
-	for (let i = 0; i < 24; i++)
-		assert.ok(
-			await invoke(investments.reserveReturn, db, { ticker: `FUND${i}` }),
-		);
-	assert.equal(
-		await invoke(investments.reserveReturn, db, { ticker: "EXTRA" }),
-		null,
-	);
-	const budget = [...db.rows.values()].find((row) =>
-		row._id.startsWith("returnBudget:"),
-	);
-	assert.equal(budget?.count, 25);
 });
 
 test("failed historical lookups can retry after repair without bypassing the cooldown", async (context) => {

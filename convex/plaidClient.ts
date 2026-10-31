@@ -133,18 +133,28 @@ export type PlaidAccount = {
 export function selectAccount(account: PlaidAccount) {
 	const balances = account.balances;
 	return {
-		account_id: account.account_id, name: account.name, type: account.type,
-		subtype: account.subtype, mask: account.mask,
+		account_id: account.account_id,
+		name: account.name,
+		type: account.type,
+		subtype: account.subtype,
+		mask: account.mask,
 		persistent_account_id: account.persistent_account_id ?? undefined,
-		balances: balances ? {
-			current: balances.current, iso_currency_code: balances.iso_currency_code ?? null,
-			unofficial_currency_code: balances.unofficial_currency_code ?? null,
-		} : undefined,
+		balances: balances
+			? {
+					current: balances.current,
+					iso_currency_code: balances.iso_currency_code ?? null,
+					unofficial_currency_code: balances.unofficial_currency_code ?? null,
+				}
+			: undefined,
 	};
 }
 
-export function accountBalance(account: { balances?: { current: number | null } }) {
-	return account.balances?.current == null ? undefined : money(Math.round(account.balances.current * 100));
+export function accountBalance(account: {
+	balances?: { current: number | null };
+}) {
+	return account.balances?.current == null
+		? undefined
+		: money(Math.round(account.balances.current * 100));
 }
 export type PlaidTransaction = {
 	transaction_id: string;

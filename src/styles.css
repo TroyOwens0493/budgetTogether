@@ -1303,3 +1303,10 @@ dialog::backdrop {
 		gap: 12px;
 	}
 }
+
+.panel:has(.projection-account) > .section-heading {
+	flex-wrap: wrap;
+}
+.page-actions:has(.projection-heading) {
+	justify-content: space-between;
+}

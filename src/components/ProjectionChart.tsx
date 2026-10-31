@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ProjectionPoint } from "../domain/projections";
 import { usd } from "./ui";
 
@@ -12,11 +12,22 @@ export function ProjectionChart({
 	currentAge: number;
 }) {
 	const id = useId();
+	const chartRef = useRef<HTMLDivElement>(null);
+	const [chartWidth, setChartWidth] = useState(600);
+	useEffect(() => {
+		const element = chartRef.current;
+		if (!element) return;
+		const observer = new ResizeObserver(([entry]) =>
+			setChartWidth(Math.max(200, entry.contentRect.width)),
+		);
+		observer.observe(element);
+		return () => observer.disconnect();
+	}, []);
 	const [selected, setSelected] = useState(points.length - 1);
 	const index = Math.max(0, Math.min(selected, points.length - 1));
 	const point = points[index];
 	const max = Math.max(100, ...points.map((p) => p[kind]));
-	const width = 600,
+	const width = chartWidth,
 		height = 220,
 		left = 64,
 		right = 16,
@@ -46,61 +57,73 @@ export function ProjectionChart({
 				</span>
 			</div>
 			<strong className="projection-value">{usd(point[kind])}</strong>
-			<svg viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby={id}>
-				<title id={id}>
-					{title} from age {currentAge} to{" "}
-					{currentAge + (points.length - 1) / 12}. Use the month slider or the
-					yearly table for exact values.
-				</title>
-				{[0, 0.5, 1].map((fraction) => (
-					<g key={fraction}>
-						<line
-							x1={left}
-							x2={width - right}
-							y1={y(max * fraction)}
-							y2={y(max * fraction)}
-							className="projection-gridline"
-						/>
-						<text x={left - 8} y={y(max * fraction) + 4} textAnchor="end">
-							{new Intl.NumberFormat("en-US", {
-								notation: "compact",
-								maximumFractionDigits: 1,
-								style: "currency",
-								currency: "USD",
-							}).format((max * fraction) / 100)}
+			<div ref={chartRef}>
+				<svg
+					viewBox={`0 0 ${width} ${height}`}
+					style={{ height }}
+					role="img"
+					aria-labelledby={id}
+				>
+					<title id={id}>
+						{title} from age {currentAge} to{" "}
+						{currentAge + (points.length - 1) / 12}. Use the month slider or the
+						yearly table for exact values.
+					</title>
+					{[0, 0.5, 1].map((fraction) => (
+						<g key={fraction}>
+							<line
+								x1={left}
+								x2={width - right}
+								y1={y(max * fraction)}
+								y2={y(max * fraction)}
+								className="projection-gridline"
+							/>
+							<text x={left - 8} y={y(max * fraction) + 4} textAnchor="end">
+								{new Intl.NumberFormat("en-US", {
+									notation: "compact",
+									maximumFractionDigits: 1,
+									style: "currency",
+									currency: "USD",
+								}).format((max * fraction) / 100)}
+							</text>
+						</g>
+					))}
+					<path
+						d={path}
+						fill="none"
+						className="projection-line"
+						strokeWidth="3"
+					/>
+					<line
+						x1={x(point.month)}
+						x2={x(point.month)}
+						y1={top}
+						y2={height - bottom}
+						className="projection-marker"
+					/>
+					<circle
+						cx={x(point.month)}
+						cy={y(point[kind])}
+						r="4"
+						className="projection-dot"
+					/>
+					{[0, 0.5, 1].map((fraction) => (
+						<text
+							key={fraction}
+							x={x((points.length - 1) * fraction)}
+							y={height - 8}
+							textAnchor={
+								fraction === 1 ? "end" : fraction === 0 ? "start" : "middle"
+							}
+						>
+							Age{" "}
+							{Number(
+								(currentAge + ((points.length - 1) * fraction) / 12).toFixed(1),
+							)}
 						</text>
-					</g>
-				))}
-				<path
-					d={path}
-					fill="none"
-					className="projection-line"
-					strokeWidth="3"
-				/>
-				<line
-					x1={x(point.month)}
-					x2={x(point.month)}
-					y1={top}
-					y2={height - bottom}
-					className="projection-marker"
-				/>
-				<circle
-					cx={x(point.month)}
-					cy={y(point[kind])}
-					r="4"
-					className="projection-dot"
-				/>
-				{[0, 0.5, 1].map((fraction) => (
-					<text
-						key={fraction}
-						x={x((points.length - 1) * fraction)}
-						y={height - 8}
-						textAnchor="middle"
-					>
-						Age {Math.round(currentAge + ((points.length - 1) * fraction) / 12)}
-					</text>
-				))}
-			</svg>
+					))}
+				</svg>
+			</div>
 			<label>
 				Explore {title.toLowerCase()} by month
 				<input

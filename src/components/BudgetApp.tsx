@@ -14,6 +14,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { authClient } from "../lib/auth-client";
 import { AccountsView } from "./AccountsView";
+import { BudgetReadBoundary } from "./BudgetReadBoundary";
 import { ErrorBanner } from "./ErrorBanner";
 import { FundsView } from "./FundsView";
 import { OverviewView } from "./OverviewView";
@@ -33,6 +34,17 @@ const nav = [
 	["accounts", "Accounts & settings", Landmark],
 ] as const;
 export function BudgetApp({ home }: { home: Home }) {
+	const membershipKey = home.spaces
+		.map((space) => `${space._id}:${space.active}`)
+		.join(",");
+	return (
+		<BudgetReadBoundary membershipKey={membershipKey}>
+			<BudgetAppContent home={home} />
+		</BudgetReadBoundary>
+	);
+}
+
+function BudgetAppContent({ home }: { home: Home }) {
 	const [selected, setSelected] = useState(
 		home.spaces.find((x) => x.active && x.type === "shared")?._id ??
 			home.spaces.find((x) => x.active)?._id ??

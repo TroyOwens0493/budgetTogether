@@ -183,6 +183,10 @@ export default defineSchema({
 		.index("by_external", ["accountId", "externalId"]),
 	returnHistory: defineTable({
 		ticker: v.string(),
+		source: v.optional(
+			v.union(v.literal("Tiingo"), v.literal("Alpha Vantage")),
+		),
+		requestSource: v.optional(v.literal("Tiingo")),
 		rate: v.optional(v.number()),
 		startDate: v.optional(v.string()),
 		endDate: v.optional(v.string()),
@@ -190,10 +194,14 @@ export default defineSchema({
 		requestedAt: v.optional(v.number()),
 		error: v.optional(v.string()),
 	}).index("by_ticker", ["ticker"]),
-	returnBudget: defineTable({ date: v.string(), count: v.number() }).index(
-		"by_date",
-		["date"],
-	),
+	returnBudget: defineTable({
+		date: v.string(),
+		count: v.number(),
+		requests: v.optional(v.array(v.number())),
+		symbols: v.optional(
+			v.array(v.object({ ticker: v.string(), requestedAt: v.number() })),
+		),
+	}).index("by_date", ["date"]),
 	categories: defineTable({
 		spaceId: v.id("spaces"),
 		name: v.string(),

@@ -127,6 +127,15 @@ test("either partner can delete the shared budget, its records and both membersh
 		reviewed: false,
 		revision: 1,
 	});
+	await db.insert("projectionSettings", {
+		spaceId: sharedId,
+		currentAge: 33,
+		targetAge: 65,
+		ageAsOf: "2026-09-01",
+		cashBalance: 5000,
+		cashAnnualReturn: 0,
+		revision: 1,
+	});
 	await db.insert("funds", {
 		spaceId: sharedId,
 		startMonth: "2026-09",

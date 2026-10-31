@@ -72,6 +72,23 @@ test("age forecasts persist, split the target once, and support a maturing bond"
 		await expect(
 			page.locator(".projection-investments .projection-value"),
 		).toHaveText("$5,800.00");
+		await page
+			.locator(".projection-holding")
+			.filter({ hasText: "Index fund" })
+			.getByRole("button", { name: "Edit forecast" })
+			.click();
+		await page.getByLabel("Monthly investment contribution").fill("1100");
+		await page
+			.getByRole("button", { name: "Save investment", exact: true })
+			.click();
+		await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
+			"cannot exceed",
+		);
+		await page.getByLabel("Monthly investment contribution").fill("400");
+		await page
+			.getByRole("button", { name: "Save investment", exact: true })
+			.click();
+		await expect(page.getByRole("dialog")).toHaveCount(0);
 		await page.getByLabel("Cash savings forecast month").fill("0");
 		await expect(page.locator(".projection-cash .projection-value")).toHaveText(
 			"$5,000.00",
@@ -110,6 +127,11 @@ test("age forecasts persist, split the target once, and support a maturing bond"
 		await expect(
 			page.locator(".projection-investments .projection-value"),
 		).toHaveText("$5,800.00");
+		await page.evaluate(() => window.scrollTo(0, 0));
+		await page.screenshot({
+			path: test.info().outputPath("projections-desktop.png"),
+			fullPage: true,
+		});
 		await page.setViewportSize({ width: 390, height: 844 });
 		await expect(
 			page.getByRole("heading", { name: "Look ahead" }),
@@ -123,6 +145,10 @@ test("age forecasts persist, split the target once, and support a maturing bond"
 			() => document.documentElement.scrollWidth > innerWidth,
 		);
 		expect(overflow).toBe(false);
+		await page.screenshot({
+			path: test.info().outputPath("projections-mobile.png"),
+			fullPage: true,
+		});
 	} finally {
 		await context.close();
 		await request.delete(`/__fixture/${id}`);
