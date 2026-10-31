@@ -349,7 +349,7 @@ export function ProjectionsView({
 										</small>
 										{holding.history?.rate !== undefined && (
 											<small>
-												Alpha Vantage · {holding.history.startDate} to{" "}
+												Tiingo · {holding.history.startDate} to{" "}
 												{holding.history.endDate} ·{" "}
 												{holding.history.rate.toFixed(2)}% annualized
 												{holding.history.fetchedAt

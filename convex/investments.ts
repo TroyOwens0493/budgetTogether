@@ -154,7 +154,13 @@ export const reserveReturn = internalMutation({
 			.unique();
 		const now = Date.now();
 		if (old?.fetchedAt && now - old.fetchedAt < 30 * 86400000) return null;
-		if (old?.requestedAt && now - old.requestedAt < 86400000) return null;
+		// Failed lookups can retry after a short cooldown, including after the
+		// market-data configuration is repaired. Keep the daily request cap.
+		if (
+			old?.requestedAt &&
+			now - old.requestedAt < (old.error ? 60000 : 86400000)
+		)
+			return null;
 		const date = new Date(now).toISOString().slice(0, 10);
 		const budget = await ctx.db
 			.query("returnBudget")

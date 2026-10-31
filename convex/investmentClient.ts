@@ -106,39 +106,58 @@ export function normalizeHoldings(data: HoldingsResponse) {
 }
 
 export async function fetchHistoricalReturn(ticker: string) {
-	const key = process.env.ALPHA_VANTAGE_API_KEY;
+	const key = process.env.TIINGO_API_TOKEN;
 	if (!key)
 		throw new Error(
 			"Historical returns are unavailable until the market-data service is configured. Enter your own annual return.",
 		);
-	const url = new URL("https://www.alphavantage.co/query");
+	const asOf = new Date();
+	const start = new Date(asOf);
+	// Include an observation before the ten-year anniversary for monthly data.
+	start.setUTCFullYear(start.getUTCFullYear() - 11);
+	const url = new URL(
+		`https://api.tiingo.com/tiingo/daily/${encodeURIComponent(ticker.replaceAll(".", "-"))}/prices`,
+	);
 	url.search = new URLSearchParams({
-		function: "TIME_SERIES_MONTHLY_ADJUSTED",
-		symbol: ticker,
-		apikey: key,
+		startDate: start.toISOString().slice(0, 10),
+		endDate: asOf.toISOString().slice(0, 10),
+		resampleFreq: "monthly",
+		format: "json",
 	}).toString();
-	const response = await fetch(url, { signal: AbortSignal.timeout(20000) });
+	const response = await fetch(url, {
+		headers: { Authorization: `Token ${key}` },
+		signal: AbortSignal.timeout(20000),
+	});
+	if (response.status === 429)
+		throw new Error(
+			"The historical-price service reached its limit. Enter a return or try again later.",
+		);
 	if (!response.ok)
 		throw new Error(
 			"The historical-price service is unavailable. Try again later.",
 		);
-	const body = await response.json();
-	const series = body["Monthly Adjusted Time Series"];
-	if (!series || typeof series !== "object" || Array.isArray(series))
+	const series: unknown = await response.json();
+	if (!Array.isArray(series) || !series.length)
 		throw new Error(
-			body.Information || body.Note
-				? "The historical-price service reached its limit or requires a different data plan. Enter a return or try again later."
-				: "No adjusted price history was found for this symbol. Check its symbol or enter a return.",
+			"No adjusted price history was found for this symbol. Check its symbol or enter a return.",
 		);
 	// Never expose the provider's raw errors: they may contain request details.
 	return historicalReturn(
-		Object.entries(series).map(([date, row]) => ({
-			date,
-			adjustedClose: Number(
-				(row as Record<string, unknown>)["5. adjusted close"],
-			),
-		})),
+		series.map((row: unknown) => {
+			if (
+				!row ||
+				typeof row !== "object" ||
+				!("date" in row) ||
+				typeof row.date !== "string" ||
+				!("adjClose" in row) ||
+				typeof row.adjClose !== "number"
+			)
+				throw new Error(
+					"Historical adjusted prices are unavailable for this symbol.",
+				);
+			return { date: row.date.slice(0, 10), adjustedClose: row.adjClose };
+		}),
 		10,
-		new Date().toISOString().slice(0, 10),
+		asOf.toISOString().slice(0, 10),
 	);
 }

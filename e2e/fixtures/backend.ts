@@ -1,7 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { getFunctionName } from "convex/server";
 import * as accounts from "../../convex/accounts";
 import { authComponent } from "../../convex/auth";
 import * as budgets from "../../convex/budgets";
+import * as investments from "../../convex/investments";
 import * as personalAllocations from "../../convex/personalAllocations";
 import * as projections from "../../convex/projections";
 import * as sharing from "../../convex/sharing";
@@ -35,6 +37,8 @@ const handlers = new Map<string, unknown>([
 	["projections:saveHolding", projections.saveHolding],
 	["projections:removeHolding", projections.removeHolding],
 	["projections:includeAccount", projections.includeAccount],
+	["investments:reserveReturn", investments.reserveReturn],
+	["investments:storeReturn", investments.storeReturn],
 	["personalAllocations:list", personalAllocations.list],
 	["personalAllocations:save", personalAllocations.save],
 	["sharing:create", sharing.create],
@@ -63,7 +67,13 @@ class Scenario {
 			const ctx = {
 				db: this.db,
 				scheduler: {
-					runAfter: () => {
+					runAfter: (
+						_delay: number,
+						reference: Parameters<typeof getFunctionName>[0],
+					) => {
+						// The test seeds the result explicitly; never call external services.
+						if (getFunctionName(reference) === "investments:fetchReturn")
+							return;
 						throw new Error("External jobs are disabled in browser tests.");
 					},
 				},

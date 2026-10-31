@@ -386,31 +386,45 @@ test("normalization supports selected types and marks unsupported, missing, and 
 });
 
 test("historical requests use adjusted monthly prices and never expose provider error details", async (context) => {
-	context.mock.method(globalThis, "fetch", async (url: URL | string) => {
-		assert.equal(
-			new URL(String(url)).searchParams.get("function"),
-			"TIME_SERIES_MONTHLY_ADJUSTED",
-		);
-		return new Response(
-			JSON.stringify({
-				"Monthly Adjusted Time Series": {
-					"2015-01-30": { "5. adjusted close": "100" },
-					"2025-01-31": { "5. adjusted close": "200" },
-				},
-			}),
-		);
-	});
-	const previous = process.env.ALPHA_VANTAGE_API_KEY;
-	process.env.ALPHA_VANTAGE_API_KEY = "test-key";
+	context.mock.method(
+		globalThis,
+		"fetch",
+		async (url: URL | string, init: RequestInit) => {
+			const request = new URL(String(url));
+			assert.equal(request.origin, "https://api.tiingo.com");
+			assert.equal(request.pathname, "/tiingo/daily/BRK-B/prices");
+			assert.equal(request.searchParams.get("resampleFreq"), "monthly");
+			assert.equal(
+				new Headers(init.headers).get("Authorization"),
+				"Token test-key",
+			);
+			assert.equal(request.searchParams.has("token"), false);
+			assert.equal(
+				Number(request.searchParams.get("startDate")?.slice(0, 4)),
+				new Date().getUTCFullYear() - 11,
+			);
+			return new Response(
+				JSON.stringify([
+					{ date: "2015-01-30T00:00:00.000Z", adjClose: 100, close: 50 },
+					{ date: "2025-01-31T00:00:00.000Z", adjClose: 200, close: 500 },
+				]),
+			);
+		},
+	);
+	const previous = process.env.TIINGO_API_TOKEN;
+	process.env.TIINGO_API_TOKEN = "test-key";
 	try {
-		const result = await fetchHistoricalReturn("IBM");
+		const result = await fetchHistoricalReturn("BRK.B");
 		assert.ok(Math.abs(result.rate - 7.177) < 0.02);
+		assert.equal(result.startDate, "2015-01-30");
+		assert.equal(result.endDate, "2025-01-31");
 		context.mock.method(
 			globalThis,
 			"fetch",
 			async () =>
 				new Response(
 					JSON.stringify({ Information: "secret-provider-request-details" }),
+					{ status: 429 },
 				),
 		);
 		await assert.rejects(
@@ -420,8 +434,58 @@ test("historical requests use adjusted monthly prices and never expose provider 
 				!error.message.includes("secret-provider"),
 		);
 	} finally {
-		if (previous === undefined) delete process.env.ALPHA_VANTAGE_API_KEY;
-		else process.env.ALPHA_VANTAGE_API_KEY = previous;
+		if (previous === undefined) delete process.env.TIINGO_API_TOKEN;
+		else process.env.TIINGO_API_TOKEN = previous;
+	}
+});
+
+test("loaded historical prices feed budget-funded forecasts through the return cache", async (context) => {
+	const { db, privateId } = await forecastFixture();
+	await invoke(projections.saveHolding, db, {
+		...input,
+		spaceId: privateId,
+		annualReturnOverride: undefined,
+	});
+	assert.match(
+		prepareProjection(
+			await invoke(projections.list, db, { spaceId: privateId }),
+		).errors.join(" "),
+		/load historical returns/,
+	);
+	const previous = process.env.TIINGO_API_TOKEN;
+	process.env.TIINGO_API_TOKEN = "test-key";
+	context.mock.method(
+		globalThis,
+		"fetch",
+		async () =>
+			new Response(
+				JSON.stringify([
+					{ date: "2015-01-30T00:00:00.000Z", adjClose: 100 },
+					{ date: "2025-01-31T00:00:00.000Z", adjClose: 200 },
+				]),
+			),
+	);
+	try {
+		await invoke(investments.refreshReturns, db, { spaceId: privateId });
+		const data = await invoke(projections.list, db, { spaceId: privateId });
+		const forecast = prepareProjection(data);
+		assert.deepEqual(forecast.errors, []);
+		const years =
+			(Date.parse("2025-01-31") - Date.parse("2015-01-30")) /
+			(365.2425 * 86400000);
+		const annualFactor = 2 ** (1 / years);
+		const monthlyFactor = annualFactor ** (1 / 12);
+		const expected = Math.round(
+			100000 * annualFactor +
+				(40000 * (annualFactor - 1)) / (monthlyFactor - 1),
+		);
+		assert.equal(forecast.points[12].investments, expected);
+		assert.equal(forecast.points[12].cash, 1220000);
+		assert.equal(forecast.points[12].contributions, 1200000);
+		assert.equal(forecast.points[12].growth, expected - 580000);
+	} finally {
+		if (previous === undefined) delete process.env.TIINGO_API_TOKEN;
+		else process.env.TIINGO_API_TOKEN = previous;
 	}
 });
 
@@ -455,4 +519,30 @@ test("return cache reservations prevent duplicate work and bound daily requests"
 		row._id.startsWith("returnBudget:"),
 	);
 	assert.equal(budget?.count, 25);
+});
+
+test("failed historical lookups can retry after repair without bypassing the cooldown", async (context) => {
+	const { db } = await fixture();
+	const now = Date.now();
+	context.mock.method(Date, "now", () => now);
+	const first = await invoke(investments.reserveReturn, db, { ticker: "VTI" });
+	assert.ok(first);
+	await invoke(investments.storeReturn, db, {
+		...first,
+		error:
+			"Historical returns are unavailable until the market-data service is configured.",
+	});
+	assert.equal(
+		await invoke(investments.reserveReturn, db, { ticker: "VTI" }),
+		null,
+	);
+	context.mock.method(Date, "now", () => now + 60000);
+	const retry = await invoke(investments.reserveReturn, db, { ticker: "VTI" });
+	assert.ok(retry);
+	assert.equal(retry.id, first.id);
+	assert.equal(retry.requestedAt, now + 60000);
+	assert.equal(
+		await invoke(investments.reserveReturn, db, { ticker: "VTI" }),
+		null,
+	);
 });

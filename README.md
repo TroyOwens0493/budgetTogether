@@ -87,6 +87,12 @@ Select a fund for a purchase or refund split in **Transactions**. Posted purchas
 
 `src/domain/funds.ts` owns the shared monthly calculation. `convex/model/funds.ts` owns access, effective-month settings, and fund summaries. Saved plans store their fund allocations. A separate transaction index reads only entries with fund links when calculating balances. Funds and saved-plan history are still read in full for a budget space and need separate scaling work before large production workloads.
 
+## Investment forecasts
+
+The **Projections** tab uses the current month's saved savings target. Monthly investment contributions use part of that target; the remainder goes to cash savings. Contributions arrive at month end, and effective annual returns compound monthly. A missing saved budget, missing return, or contributions above the target blocks the graphs.
+
+Set `TIINGO_API_TOKEN` on the Convex development deployment to load historical returns. The backend requests [Tiingo's adjusted monthly prices](https://www.tiingo.com/documentation/end-of-day), which account for splits and dividends, and calculates compound annual growth over ten years or the available shorter history. At least one year is required. The holding shows the actual observation dates. Successful lookups are cached for 30 days; failed lookups can retry after one minute, within the existing 25-request daily cap. A manual annual return can be entered when a symbol has no supported history. Forecasts assume the current savings plan and selected returns continue.
+
 ## API and modules
 
 The PDF's API paths describe conceptual operations. This implementation uses authenticated Convex queries, mutations, and actions. The browser subscribes to queries for shared updates without a page refresh.
