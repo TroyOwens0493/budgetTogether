@@ -398,18 +398,20 @@ export function AccountsView({
 			{leaving && (
 				<ConfirmModal
 					title="Leave shared budget"
-					confirmLabel="Leave shared budget"
+					confirmLabel="Leave and delete shared budget"
 					onClose={() => setLeaving(null)}
 					onConfirm={() =>
 						run(
 							() => leave({ spaceId: leaving }),
-							"You left the shared budget.",
+							"Shared budget deleted for both people.",
 						)
 					}
 				>
 					<p>
-						Your accounts return to your private budget. The other partner keeps
-						this budget. You keep read access to previously shared records.
+						Leaving permanently deletes this shared budget and all its records
+						for both people. This cannot be undone. Each person's accounts
+						return to their private budget. Private records and bank connections
+						are kept.
 					</p>
 				</ConfirmModal>
 			)}
@@ -456,7 +458,7 @@ export function AccountsView({
 	);
 }
 
-function AccountReview({
+export function AccountReview({
 	id,
 	run,
 	close,
@@ -472,7 +474,7 @@ function AccountReview({
 	return (
 		<Modal title="Check possible duplicate accounts" onClose={close}>
 			<p>
-				No transactions will import until you complete this check. A match uses
+				No account data will import until you complete this check. A match uses
 				the bank, account type, and last four digits of an account connected by
 				you or your partner.
 			</p>

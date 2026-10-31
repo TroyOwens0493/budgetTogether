@@ -28,6 +28,21 @@ The tests cover balanced saves, reopening, reload, repeat saves, invalid amounts
 shared-to-personal funding, saving both budgets again, and concurrent plan and
 funding edits by two members. They use accessible labels and public navigation,
 so moving `PlanView` to its own module needs no test changes.
+They also check the leave confirmation, cancellation, and removal of a shared
+budget from both open sessions and after reload.
+
+Classification tests cover pending labels, uncertain answers marked for review,
+manual review that persists after reload, and editing an uncategorized import.
+They use seeded Jev results and do not call TypeSafe. The Node tests cover the
+HTTP contract, import scheduling, retries, stale answers, and legacy backfill.
+
+Projection tests use the real app stylesheet and existing Tailwind Vite plugin.
+They cover saved age settings, target allocation, reload, chart sliders, bond
+maturity proceeds, and mobile overflow. Desktop and mobile PNGs are written to
+the test's output directory for visual checks. External Plaid and Tiingo
+calls remain disabled in the browser fixture. Node tests mock those HTTP
+contracts and check holdings imports, retries, privacy, revisions, return
+overrides, historical growth, and bond/CD cash flows.
 
 The test server binds only to `127.0.0.1`, does not read environment files, and is
 never part of the app server or build. Each test deletes its household and closes

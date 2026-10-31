@@ -2,22 +2,23 @@ import { useMutation, useQuery } from "convex/react";
 import {
 	ArrowLeftRight,
 	CalendarDays,
-	CircleCheck,
 	Landmark,
 	LayoutDashboard,
 	LogOut,
 	Settings,
+	TrendingUp,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { authClient } from "../lib/auth-client";
 import { AccountsView } from "./AccountsView";
+import { BudgetReadBoundary } from "./BudgetReadBoundary";
 import { ErrorBanner } from "./ErrorBanner";
 import { OverviewView } from "./OverviewView";
 import { PlanView } from "./PlanView";
 import { ProfileView } from "./ProfileView";
-import { ReviewView } from "./ReviewView";
+import { ProjectionsView } from "./ProjectionsView";
 import { TransactionsView } from "./TransactionsView";
 import { useAlerts } from "./useAlerts";
 import type { Home, Run } from "./view-types";
@@ -26,16 +27,30 @@ const nav = [
 	["overview", "Overview", LayoutDashboard],
 	["transactions", "Transactions", ArrowLeftRight],
 	["budget", "Monthly budget", CalendarDays],
-	["review", "Monthly review", CircleCheck],
+	["projections", "Projections", TrendingUp],
 	["accounts", "Accounts & settings", Landmark],
 ] as const;
 export function BudgetApp({ home }: { home: Home }) {
+	const membershipKey = home.spaces
+		.map((space) => `${space._id}:${space.active}`)
+		.join(",");
+	return (
+		<BudgetReadBoundary membershipKey={membershipKey}>
+			<BudgetAppContent home={home} />
+		</BudgetReadBoundary>
+	);
+}
+
+function BudgetAppContent({ home }: { home: Home }) {
 	const [selected, setSelected] = useState(
 		home.spaces.find((x) => x.active && x.type === "shared")?._id ??
 			home.spaces.find((x) => x.active)?._id ??
 			home.spaces[0]._id,
 	);
 	const space = home.spaces.find((x) => x._id === selected) ?? home.spaces[0];
+	useEffect(() => {
+		if (selected !== space._id) setSelected(space._id);
+	}, [selected, space._id]);
 	const currentMonth = new Intl.DateTimeFormat("en-CA", {
 		timeZone: space.timeZone,
 		year: "numeric",
@@ -143,19 +158,21 @@ export function BudgetApp({ home }: { home: Home }) {
 					</span>
 					<div>
 						{alerts.button}
-						<label className="month-picker">
-							<span className="sr-only">Reporting month</span>
-							<input
-								type="month"
-								min="0001-01"
-								max="9999-12"
-								value={month}
-								onChange={(e) => {
-									if (/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value))
-										setMonth(e.target.value);
-								}}
-							/>
-						</label>
+						{view !== "projections" && (
+							<label className="month-picker">
+								<span className="sr-only">Reporting month</span>
+								<input
+									type="month"
+									min="0001-01"
+									max="9999-12"
+									value={month}
+									onChange={(e) => {
+										if (/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value))
+											setMonth(e.target.value);
+									}}
+								/>
+							</label>
+						)}
 						<span className="avatar">
 							{home.profile?.name.slice(0, 2).toUpperCase()}
 						</span>
@@ -176,7 +193,19 @@ export function BudgetApp({ home }: { home: Home }) {
 					</div>
 				)}
 				<div aria-busy={busy}>
-					{!data ? (
+					{view === "projections" ? (
+						<ProjectionsView
+							key={space._id}
+							spaceId={space._id}
+							active={space.active}
+							run={run}
+							onOpenPlan={(month) => {
+								setMonth(month);
+								setView("budget");
+							}}
+							onOpenAccounts={() => setView("accounts")}
+						/>
+					) : !data ? (
 						<p aria-live="polite">Loading this month…</p>
 					) : view === "overview" ? (
 						<OverviewView
@@ -190,14 +219,15 @@ export function BudgetApp({ home }: { home: Home }) {
 					) : view === "transactions" ? (
 						<TransactionsView {...props} categories={data.categories} />
 					) : view === "budget" ? (
-						<PlanView
-							key={`${space._id}:${month}`}
-							{...props}
-							data={data}
-							shared={space.type === "shared"}
-						/>
-					) : view === "review" ? (
-						<ReviewView key={`${space._id}:${month}`} {...props} data={data} />
+						<>
+							{alerts.budgetNotices}
+							<PlanView
+								key={`${space._id}:${month}`}
+								{...props}
+								data={data}
+								shared={space.type === "shared"}
+							/>
+						</>
 					) : view === "profile" ? (
 						<ProfileView
 							profile={home.profile!}
@@ -206,6 +236,7 @@ export function BudgetApp({ home }: { home: Home }) {
 						/>
 					) : (
 						<AccountsView
+							key={space._id}
 							{...props}
 							home={home}
 							fundedByShared={Boolean(data.fundedBy)}

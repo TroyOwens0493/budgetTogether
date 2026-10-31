@@ -1,6 +1,7 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 import { removedValidator, txValidator } from "./bankTypes";
+import { fixedIncome, investmentType } from "./projectionTypes";
 export const split = v.object({
 	categoryId: v.id("categories"),
 	amount: v.number(),
@@ -17,6 +18,13 @@ export const bankAccount = v.object({
 	subtype: v.union(v.string(), v.null()),
 	mask: v.union(v.string(), v.null()),
 	persistent_account_id: v.optional(v.union(v.string(), v.null())),
+	balances: v.optional(
+		v.object({
+			current: v.union(v.number(), v.null()),
+			iso_currency_code: v.optional(v.union(v.string(), v.null())),
+			unofficial_currency_code: v.optional(v.union(v.string(), v.null())),
+		}),
+	),
 });
 export default defineSchema({
 	// Keep starter tables so an existing development deployment can migrate safely.
@@ -68,6 +76,8 @@ export default defineSchema({
 		institution: v.string(),
 		institutionId: v.string(),
 		accessToken: v.string(),
+		product: v.optional(v.literal("investments")),
+		investmentSyncAt: v.optional(v.number()),
 		cursor: v.optional(v.string()),
 		syncRunId: v.optional(v.id("bankSyncRuns")),
 		pendingAccounts: v.optional(v.array(bankAccount)),
@@ -109,14 +119,74 @@ export default defineSchema({
 		mask: v.string(),
 		active: v.boolean(),
 		revision: v.number(),
+		investment: v.optional(v.boolean()),
+		balance: v.optional(v.number()),
+		balanceAsOf: v.optional(v.number()),
+		currency: v.optional(v.string()),
+		projectionCashExcluded: v.optional(v.boolean()),
 		assignments: v.optional(
-			v.array(v.object({ spaceId: v.id("spaces"), startsOn: v.string() })),
+			v.array(
+				v.object({
+					spaceId: v.union(v.id("spaces"), v.null()),
+					startsOn: v.string(),
+				}),
+			),
 		),
 	})
 		.index("by_space", ["spaceId"])
 		.index("by_user", ["userId"])
 		.index("by_external", ["connectionId", "externalId"])
 		.index("by_persistent", ["persistentId"]),
+	projectionSettings: defineTable({
+		spaceId: v.id("spaces"),
+		currentAge: v.number(),
+		targetAge: v.number(),
+		ageAsOf: v.string(),
+		cashBalance: v.number(),
+		cashAnnualReturn: v.number(),
+		revision: v.number(),
+	}).index("by_space", ["spaceId"]),
+	holdings: defineTable({
+		accountId: v.id("accounts"),
+		externalId: v.optional(v.string()),
+		name: v.string(),
+		type: investmentType,
+		ticker: v.optional(v.string()),
+		balance: v.optional(v.number()),
+		asOf: v.optional(v.string()),
+		currency: v.string(),
+		problem: v.optional(v.string()),
+		fixedIncome: v.optional(fixedIncome),
+		fixedIncomeOverride: v.optional(fixedIncome),
+		annualReturnOverride: v.optional(v.number()),
+		monthlyContribution: v.number(),
+		excluded: v.boolean(),
+		active: v.boolean(),
+		revision: v.number(),
+	})
+		.index("by_account", ["accountId"])
+		.index("by_external", ["accountId", "externalId"]),
+	returnHistory: defineTable({
+		ticker: v.string(),
+		source: v.optional(
+			v.union(v.literal("Tiingo"), v.literal("Alpha Vantage")),
+		),
+		requestSource: v.optional(v.literal("Tiingo")),
+		rate: v.optional(v.number()),
+		startDate: v.optional(v.string()),
+		endDate: v.optional(v.string()),
+		fetchedAt: v.optional(v.number()),
+		requestedAt: v.optional(v.number()),
+		error: v.optional(v.string()),
+	}).index("by_ticker", ["ticker"]),
+	returnBudget: defineTable({
+		date: v.string(),
+		count: v.number(),
+		requests: v.optional(v.array(v.number())),
+		symbols: v.optional(
+			v.array(v.object({ ticker: v.string(), requestedAt: v.number() })),
+		),
+	}).index("by_date", ["date"]),
 	categories: defineTable({
 		spaceId: v.id("spaces"),
 		name: v.string(),
@@ -150,6 +220,28 @@ export default defineSchema({
 		pending: v.boolean(),
 		kind,
 		suggestedKind: v.optional(kind),
+		bankDescription: v.optional(v.string()),
+		bankMerchant: v.optional(v.string()),
+		classificationStatus: v.optional(
+			v.union(
+				v.literal("pending"),
+				v.literal("classified"),
+				v.literal("review"),
+				v.literal("manual"),
+				v.literal("skipped"),
+			),
+		),
+		classificationAttempts: v.optional(v.number()),
+		classificationRetryAt: v.optional(v.number()),
+		classificationError: v.optional(v.string()),
+		classification: v.optional(
+			v.object({
+				model: v.string(),
+				kindConfidence: v.number(),
+				categoryConfidence: v.number(),
+				classifiedAt: v.number(),
+			}),
+		),
 		note: v.string(),
 		splits: v.array(split),
 		removed: v.boolean(),
@@ -158,6 +250,11 @@ export default defineSchema({
 		reconciledWith: v.optional(v.id("transactions")),
 	})
 		.index("by_space_date", ["spaceId", "date"])
+		.index("by_classification", [
+			"source",
+			"classificationStatus",
+			"classificationRetryAt",
+		])
 		.index("by_pending_external", ["accountId", "pendingExternalId"])
 		.index("by_external", ["accountId", "externalId"]),
 	personalAllocations: defineTable({

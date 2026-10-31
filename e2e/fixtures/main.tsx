@@ -2,6 +2,7 @@ import { useQuery } from "convex/react";
 import { createRoot } from "react-dom/client";
 import { api } from "../../convex/_generated/api";
 import { BudgetApp } from "../../src/components/BudgetApp";
+import "../../src/styles.css";
 
 function AuthenticatedApp() {
 	const home = useQuery(api.budgets.home, {});

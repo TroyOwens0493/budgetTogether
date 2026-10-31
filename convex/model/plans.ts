@@ -65,7 +65,7 @@ export async function save(
 			Math.max(0, sourceResult.savings - (sourcePlan?.savingsTarget ?? 0))
 		)
 			throw new ConvexError(
-				`Carry-forward from ${source} is invalid. Reopen its review.`,
+				`Carry-forward from ${source} is invalid. Check that month’s transactions and savings target.`,
 			);
 	}
 	const balance = planBalance(

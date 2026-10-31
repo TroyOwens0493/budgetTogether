@@ -23,7 +23,9 @@ http.route({
 		const event = JSON.parse(body);
 		if (
 			typeof event.item_id === "string" &&
-			["TRANSACTIONS", "ITEM"].includes(event.webhook_type)
+			["TRANSACTIONS", "ITEM", "HOLDINGS", "INVESTMENTS_TRANSACTIONS"].includes(
+				event.webhook_type,
+			)
 		)
 			await ctx.runMutation(internal.bank.event, {
 				itemId: event.item_id,

@@ -1,7 +1,13 @@
 import { fileURLToPath } from "node:url";
+import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { createServer } from "vite";
-import { createScenario, deleteScenario, invokeSession } from "./backend";
+import {
+	createClassificationScenario,
+	createScenario,
+	deleteScenario,
+	invokeSession,
+} from "./backend";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const server = await createServer({
@@ -11,6 +17,7 @@ const server = await createServer({
 	cacheDir: `${root}/node_modules/.vite-budget-tasks`,
 	plugins: [
 		react(),
+		tailwindcss(),
 		{
 			name: "isolated-budget-browser-fixture",
 			configureServer(vite) {
@@ -19,8 +26,26 @@ const server = await createServer({
 					res.setHeader("Content-Type", "application/json");
 					res.setHeader("Cache-Control", "no-store");
 					try {
-						if (req.method === "POST" && req.url === "/__fixture") {
-							res.end(JSON.stringify({ id: await createScenario() }));
+						if (
+							req.method === "POST" &&
+							req.url === "/__fixture/classification"
+						) {
+							res.end(
+								JSON.stringify({ id: await createClassificationScenario() }),
+							);
+							return;
+						}
+						if (
+							req.method === "POST" &&
+							["/__fixture", "/__fixture/overspending"].includes(req.url)
+						) {
+							res.end(
+								JSON.stringify({
+									id: await createScenario(
+										req.url === "/__fixture/overspending",
+									),
+								}),
+							);
 							return;
 						}
 						if (req.method === "DELETE") {
