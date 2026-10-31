@@ -842,6 +842,41 @@ dialog::backdrop {
 	width: 18px;
 	min-height: 18px;
 }
+.checkbox input[type="checkbox"] {
+	appearance: none;
+	flex-shrink: 0;
+	display: grid;
+	place-content: center;
+	height: 18px;
+	padding: 0;
+	border: 2px solid #68736d;
+	border-radius: 3px;
+	cursor: pointer;
+}
+.checkbox input[type="checkbox"]:checked {
+	background: var(--green);
+	border-color: var(--green);
+}
+.checkbox input[type="checkbox"]:checked::after {
+	content: "";
+	width: 5px;
+	height: 9px;
+	border: solid white;
+	border-width: 0 2px 2px 0;
+	transform: translateY(-1px) rotate(45deg);
+}
+.checkbox input[type="checkbox"]:disabled {
+	cursor: wait;
+	opacity: 0.6;
+}
+@media (forced-colors: active) {
+	.checkbox input[type="checkbox"] {
+		appearance: auto;
+	}
+	.checkbox input[type="checkbox"]::after {
+		display: none;
+	}
+}
 .reconcile {
 	margin-top: 25px;
 	border-top: 1px solid var(--border);

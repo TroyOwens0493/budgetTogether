@@ -131,6 +131,33 @@ test("historical rates fill missing assumptions, overrides take priority, and sm
 	);
 });
 
+test("a fund without a trading symbol requests an override and exclusion removes its warning", async () => {
+	const { db, privateId } = await forecastFixture();
+	await invoke(projections.saveHolding, db, {
+		...input,
+		spaceId: privateId,
+		ticker: "",
+		annualReturnOverride: undefined,
+	});
+	let data = await invoke(projections.list, db, { spaceId: privateId });
+	assert.deepEqual(prepareProjection(data).errors, [
+		"Public fund: enter an annual return override. No trading symbol is available for historical returns.",
+	]);
+	const holding = data.accounts.flatMap((account) => account.holdings)[0];
+	await invoke(projections.saveHolding, db, {
+		...input,
+		spaceId: privateId,
+		id: holding._id,
+		ticker: "",
+		annualReturnOverride: undefined,
+		excluded: true,
+		revision: holding.revision,
+	});
+	data = await invoke(projections.list, db, { spaceId: privateId });
+	assert.deepEqual(prepareProjection(data).errors, []);
+	assert.ok(prepareProjection(data).points.length > 0);
+});
+
 test("a CD needs an explicit yield and maturity date before it can be forecast", async () => {
 	const { db, privateId } = await forecastFixture();
 	await invoke(projections.saveHolding, db, {

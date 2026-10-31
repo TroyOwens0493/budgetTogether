@@ -63,6 +63,8 @@ export async function list(ctx: QueryCtx, spaceId: Id<"spaces">) {
 				return {
 					_id: account._id,
 					name: account.name,
+					mask: account.mask,
+					institution: connection?.institution,
 					type: account.type,
 					investment: Boolean(account.investment),
 					balance: account.balance,

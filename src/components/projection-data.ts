@@ -50,9 +50,12 @@ export function prepareProjection(data: ProjectionData) {
 	let excluded = 0;
 	for (const account of data.accounts) {
 		if (account.projectionCashExcluded) continue;
+		const name = [account.name, account.mask, account.institution]
+			.filter(Boolean)
+			.join(" · ");
 		if (account.stale)
 			warnings.push(
-				`${account.name}: the last import did not complete. This forecast uses the last available data.`,
+				`${name}: the last import did not complete. This forecast uses the last available data.`,
 			);
 		if (!account.investment) {
 			if (
@@ -61,7 +64,7 @@ export function prepareProjection(data: ProjectionData) {
 				account.balance < 0
 			)
 				errors.push(
-					`${account.name}: a nonnegative USD cash balance is required. Sync the account or exclude it.`,
+					`${name}: a nonnegative USD cash balance is required. Sync the account or exclude it.`,
 				);
 			else cash += account.balance;
 			continue;
@@ -76,7 +79,7 @@ export function prepareProjection(data: ProjectionData) {
 				Math.abs(total - account.balance) > 100
 			)
 				errors.push(
-					`${account.name}: reported holdings do not match the account balance. Sync the account or exclude it until its data is complete.`,
+					`${name}: reported holdings do not match the account balance. Sync the account or exclude it until its data is complete.`,
 				);
 		}
 		for (const holding of account.holdings) {
@@ -89,7 +92,11 @@ export function prepareProjection(data: ProjectionData) {
 			const rate = holdingReturn(holding);
 			if (rate === undefined)
 				errors.push(
-					`${holding.name}: enter an annual return or load historical returns.`,
+					holding.type === "cd"
+						? `${holding.name}: enter the CD's annual yield.`
+						: !holding.ticker
+							? `${holding.name}: enter an annual return override. No trading symbol is available for historical returns.`
+							: `${holding.name}: enter an annual return or load historical returns.`,
 				);
 			if (
 				holding.balance === undefined ||
