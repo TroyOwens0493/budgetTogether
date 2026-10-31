@@ -5,6 +5,7 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { cents } from "../domain/budget";
 import { annualReturn } from "../domain/projections";
 import { labelError } from "../domain/validation";
+import { errorMessage } from "../lib/error-message";
 import { ErrorBanner } from "./ErrorBanner";
 import {
 	effectiveFixed,
@@ -24,9 +25,7 @@ function useEditorError() {
 		try {
 			return await work();
 		} catch (error) {
-			setError(
-				error instanceof Error ? error.message : "The save failed. Try again.",
-			);
+			setError(errorMessage(error, "The save failed. Try again."));
 			throw error;
 		}
 	}

@@ -164,6 +164,61 @@ export function deleteScenario(id: string) {
 	scenarios.delete(id);
 }
 
+export async function createProjectionScenario() {
+	const id = await createScenario();
+	const scenario = scenarios.get(id);
+	if (!scenario) throw new Error("Missing projection scenario.");
+	const space = [...scenario.db.rows.values()].find((x) => x.type === "shared");
+	if (!space) throw new Error("Missing projection budget.");
+	for (const excluded of [false, true]) {
+		const connectionId = await scenario.db.insert("connections", {
+			userId: "alice",
+			institution: excluded ? "Second Sandbox Bank" : "First Sandbox Bank",
+			status: "connected",
+		});
+		await scenario.db.insert("accounts", {
+			spaceId: space._id,
+			userId: "alice",
+			name: "Plaid Saving",
+			type: "savings",
+			mask: "1111",
+			connectionId,
+			projectionCashExcluded: excluded,
+			active: true,
+			revision: 0,
+		});
+	}
+	const connectionId = await scenario.db.insert("connections", {
+		userId: "alice",
+		institution: "Plaid Sandbox",
+		status: "connected",
+	});
+	const accountId = await scenario.db.insert("accounts", {
+		spaceId: space._id,
+		userId: "alice",
+		connectionId,
+		name: "Plaid 401k",
+		type: "401k",
+		investment: true,
+		balance: 200000,
+		currency: "USD",
+		active: true,
+		revision: 0,
+	});
+	await scenario.db.insert("holdings", {
+		accountId,
+		name: "Trp Equity Income",
+		type: "mutualFund",
+		balance: 100000,
+		currency: "USD",
+		monthlyContribution: 0,
+		excluded: false,
+		active: true,
+		revision: 0,
+	});
+	return id;
+}
+
 export async function createClassificationScenario() {
 	const id = await createScenario();
 	const scenario = scenarios.get(id);

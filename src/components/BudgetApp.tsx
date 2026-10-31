@@ -13,6 +13,7 @@ import { useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { authClient } from "../lib/auth-client";
+import { errorMessage } from "../lib/error-message";
 import { AccountsView } from "./AccountsView";
 import { BudgetReadBoundary } from "./BudgetReadBoundary";
 import { ErrorBanner } from "./ErrorBanner";
@@ -77,9 +78,7 @@ function BudgetAppContent({ home }: { home: Home }) {
 			setNotice(success);
 			return true;
 		} catch (e) {
-			setError(
-				e instanceof Error ? e.message : "The request failed. Try again.",
-			);
+			setError(errorMessage(e, "The request failed. Try again."));
 			return false;
 		} finally {
 			setBusy(false);
@@ -89,7 +88,7 @@ function BudgetAppContent({ home }: { home: Home }) {
 	useEffect(() => {
 		if (space.active)
 			void ensureMonth({ spaceId: space._id, month }).catch((e) =>
-				setError(e.message),
+				setError(errorMessage(e, "The request failed. Try again.")),
 			);
 	}, [space._id, space.active, month, ensureMonth]);
 	const props = { spaceId: space._id, month, active: space.active, run };

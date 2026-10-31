@@ -1,5 +1,182 @@
 import { expect, test } from "@playwright/test";
 
+test("account exclusions clear only their own warnings and restore graphs after reload", async ({
+	browser,
+	request,
+	baseURL,
+}) => {
+	if (!baseURL) throw new Error("Missing fixture URL.");
+	const { id } = await (await request.post("/__fixture/projections")).json();
+	const context = await browser.newContext({ baseURL, timezoneId: "UTC" });
+	await context.addCookies([
+		{
+			name: "bt-test-session",
+			value: `${id}:alice`,
+			url: baseURL,
+			httpOnly: true,
+		},
+	]);
+	const invoke = async (name: string, args: unknown) => {
+		const response = await context.request.post("/__fixture/invoke", {
+			data: { name, args },
+		});
+		expect(response.ok()).toBe(true);
+		return (await response.json()).value;
+	};
+	try {
+		const home = await invoke("budgets:home", {});
+		const spaceId = home.spaces.find(
+			(space: { type: string }) => space.type === "shared",
+		)._id;
+		await invoke("budgets:savePlan", {
+			spaceId,
+			month: new Date().toISOString().slice(0, 7),
+			expectedIncome: 100000,
+			savingsTarget: 100000,
+			limits: [],
+			revision: 0,
+		});
+		await invoke("projections:saveSettings", {
+			spaceId,
+			currentAge: 33,
+			targetAge: 34,
+			cashBalance: 100000,
+			cashAnnualReturn: 0,
+			revision: 0,
+		});
+		const page = await context.newPage();
+		await page.goto("/e2e/fixtures/index.html");
+		await page
+			.getByRole("button", { name: "Projections", exact: true })
+			.click();
+		const savings = page.getByRole("checkbox", {
+			name: /^Include Plaid Saving ending in /,
+		});
+		const investment = page.getByRole("checkbox", {
+			name: "Include Plaid 401k at Plaid Sandbox",
+			exact: true,
+		});
+		const attention = page.getByRole("region", {
+			name: "Forecast needs attention",
+		});
+		await expect(savings.nth(0)).toBeChecked();
+		await expect(savings.nth(1)).not.toBeChecked();
+		await expect(savings.nth(0)).toHaveAccessibleName(
+			"Include Plaid Saving ending in 1111 at First Sandbox Bank",
+		);
+		await expect(savings.nth(1)).toHaveAccessibleName(
+			"Include Plaid Saving ending in 1111 at Second Sandbox Bank",
+		);
+		await expect(savings.nth(0).locator("..")).toContainText(
+			"Included in forecast",
+		);
+		await expect(savings.nth(1).locator("..")).toContainText(
+			"Excluded from forecast",
+		);
+		await expect(attention.getByRole("listitem")).toHaveCount(3);
+		await expect(page.locator(".projection-chart")).toHaveCount(0);
+
+		// Restored native form state must not override the saved account selection.
+		await savings.nth(0).evaluate((input: HTMLInputElement) => {
+			input.checked = false;
+		});
+		await expect(savings.nth(0)).not.toBeChecked();
+		await expect(savings.nth(0).locator("..")).toContainText(
+			"Included in forecast",
+		);
+		await savings.nth(0).click();
+		await expect(savings.nth(0)).not.toBeChecked();
+		await expect(attention).not.toContainText("Plaid Saving");
+		await expect(savings.nth(0).locator("..")).toContainText(
+			"Excluded from forecast",
+		);
+		await expect(attention.getByRole("listitem")).toHaveCount(2);
+		await investment.click();
+		await expect(investment).not.toBeChecked();
+		await expect(attention).toHaveCount(0);
+		await expect(page.locator(".projection-chart")).toHaveCount(2);
+		await expect(page.locator(".projection-cash .projection-value")).toHaveText(
+			"$13,000.00",
+		);
+		await expect(
+			page.locator(".projection-investments .projection-value"),
+		).toHaveText("$0.00");
+
+		// Same-name accounts have independent saved settings.
+		await savings.nth(1).focus();
+		await savings.nth(1).press("Space");
+		await expect(savings.nth(1)).toBeChecked();
+		await expect(attention.getByRole("listitem")).toHaveCount(1);
+		await expect(attention).toContainText("Second Sandbox Bank");
+		await expect(savings.nth(0)).not.toBeChecked();
+		await savings.nth(1).press("Space");
+		await expect(savings.nth(1)).not.toBeChecked();
+		await expect(attention).toHaveCount(0);
+		await investment.click();
+		await expect(investment).toBeChecked();
+		await expect(attention.getByRole("listitem")).toHaveCount(2);
+		await expect(attention).not.toContainText("Plaid Saving");
+		await investment.click();
+		await expect(investment).not.toBeChecked();
+		await expect(attention).toHaveCount(0);
+
+		await page.reload();
+		await page
+			.getByRole("button", { name: "Projections", exact: true })
+			.click();
+		await expect(savings.nth(0)).not.toBeChecked();
+		await expect(savings.nth(1)).not.toBeChecked();
+		await expect(investment).not.toBeChecked();
+		await expect(attention).toHaveCount(0);
+		await expect(page.locator(".projection-chart")).toHaveCount(2);
+		await expect(page.locator(".projection-cash .projection-value")).toHaveText(
+			"$13,000.00",
+		);
+		await expect(savings.nth(0).locator("..")).toContainText(
+			"Excluded from forecast",
+		);
+		await expect(savings.nth(1).locator("..")).toContainText(
+			"Excluded from forecast",
+		);
+		await expect(investment.locator("..")).toContainText(
+			"Excluded from forecast",
+		);
+
+		// A failed save must keep the saved exclusion and leave its control usable.
+		await page.route("**/__fixture/invoke", async (route) => {
+			if (
+				route.request().postDataJSON().name !== "projections:includeAccount"
+			) {
+				await route.continue();
+				return;
+			}
+			await route.fulfill({
+				status: 400,
+				contentType: "application/json",
+				body: JSON.stringify({ error: "The account changed. Try again." }),
+			});
+		});
+		await savings.nth(0).click();
+		await expect(page.getByRole("alert")).toHaveText(
+			"The account changed. Try again.",
+		);
+		await expect(savings.nth(0)).not.toBeChecked();
+		await expect(savings.nth(0)).toBeEnabled();
+		await expect(savings.nth(0).locator("..")).toContainText(
+			"Excluded from forecast",
+		);
+		await expect(attention).toHaveCount(0);
+		await expect(page.locator(".projection-chart")).toHaveCount(2);
+		await page.screenshot({
+			path: test.info().outputPath("excluded-accounts-graphs.png"),
+			fullPage: true,
+		});
+	} finally {
+		await context.close();
+		await request.delete(`/__fixture/${id}`);
+	}
+});
+
 test("age forecasts persist, split the target once, and support a maturing bond", async ({
 	browser,
 	request,
@@ -81,14 +258,16 @@ test("age forecasts persist, split the target once, and support a maturing bond"
 		await page
 			.getByRole("button", { name: "Save investment", exact: true })
 			.click();
-		await expect(page.getByRole("dialog").getByRole("alert")).toContainText(
-			"cannot exceed",
-		);
+		await expect(page.getByRole("alert")).toHaveText([
+			"Investment contributions cannot exceed this month's savings target.",
+			"Investment contributions cannot exceed this month's savings target.",
+		]);
 		await page.getByLabel("Monthly investment contribution").fill("400");
 		await page
 			.getByRole("button", { name: "Save investment", exact: true })
 			.click();
 		await expect(page.getByRole("dialog")).toHaveCount(0);
+		await expect(page.getByRole("alert")).toHaveCount(0);
 		await page.getByLabel("Cash savings forecast month").fill("0");
 		await expect(page.locator(".projection-cash .projection-value")).toHaveText(
 			"$5,000.00",

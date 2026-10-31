@@ -1,5 +1,5 @@
 import { useAction, useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { type ReactNode, useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { openPlaid } from "../lib/plaid-link";
@@ -15,7 +15,60 @@ import {
 	prepareProjection,
 } from "./projection-data";
 import { ConfirmModal, usd } from "./ui";
-import type { ViewProps } from "./view-types";
+import type { Run, ViewProps } from "./view-types";
+
+function AccountForecastToggle({
+	account,
+	run,
+	children,
+}: {
+	account: InvestmentAccount;
+	run: Run;
+	children: ReactNode;
+}) {
+	const include = useMutation(api.projections.includeAccount);
+	const [pending, setPending] = useState<boolean | null>(null);
+	useEffect(() => {
+		if (pending === account.projectionCashExcluded) setPending(null);
+	}, [account.projectionCashExcluded, pending]);
+	const saving = pending !== null && pending !== account.projectionCashExcluded;
+	const name = account.mask
+		? `${account.name} ending in ${account.mask}`
+		: account.name;
+	return (
+		<label className="checkbox">
+			<input
+				type="checkbox"
+				aria-label={`Include ${name}${account.institution ? ` at ${account.institution}` : ""}`}
+				checked={!account.projectionCashExcluded}
+				disabled={saving}
+				onChange={async () => {
+					const excluded = !account.projectionCashExcluded;
+					setPending(excluded);
+					const saved = await run(() =>
+						include({ id: account._id, excluded, revision: account.revision }),
+					);
+					if (!saved) setPending(null);
+				}}
+			/>
+			<span>
+				<strong>
+					{account.name}
+					{account.mask ? ` · ${account.mask}` : ""}
+				</strong>
+				{account.institution && <small>{account.institution}</small>}
+				<small aria-live="polite">
+					{saving
+						? "Saving forecast selection…"
+						: account.projectionCashExcluded
+							? "Excluded from forecast"
+							: "Included in forecast"}
+				</small>
+				{children}
+			</span>
+		</label>
+	);
+}
 
 export function ProjectionsView({
 	spaceId,
@@ -28,7 +81,6 @@ export function ProjectionsView({
 	onOpenAccounts: () => void;
 }) {
 	const data = useQuery(api.projections.list, active ? { spaceId } : "skip");
-	const include = useMutation(api.projections.includeAccount);
 	const remove = useMutation(api.projections.removeHolding);
 	const link = useAction(api.bank.link),
 		exchange = useAction(api.bank.exchange);
@@ -198,35 +250,17 @@ export function ProjectionsView({
 					.filter((a) => !a.investment)
 					.map((account) => (
 						<div key={account._id} className="account-row">
-							<label className="checkbox">
-								<input
-									type="checkbox"
-									aria-label={`Include ${account.name}`}
-									checked={!account.projectionCashExcluded}
-									onChange={(e) => {
-										const excluded = !e.target.checked;
-										void run(() =>
-											include({
-												id: account._id,
-												excluded,
-												revision: account.revision,
-											}),
-										);
-									}}
-								/>
-								<span>
-									<strong>{account.name}</strong>
-									<small>
-										{account.balance === undefined
-											? "Balance unavailable"
-											: usd(account.balance)}{" "}
-										·{" "}
-										{account.balanceAsOf
-											? new Date(account.balanceAsOf).toLocaleString()
-											: "Not synced"}
-									</small>
-								</span>
-							</label>
+							<AccountForecastToggle account={account} run={run}>
+								<small>
+									{account.balance === undefined
+										? "Balance unavailable"
+										: usd(account.balance)}{" "}
+									·{" "}
+									{account.balanceAsOf
+										? new Date(account.balanceAsOf).toLocaleString()
+										: "Not synced"}
+								</small>
+							</AccountForecastToggle>
 						</div>
 					))}
 				{!data.accounts.some((a) => !a.investment) && (
@@ -293,32 +327,14 @@ export function ProjectionsView({
 					.map((account) => (
 						<div className="projection-account" key={account._id}>
 							<div className="account-row">
-								<label className="checkbox">
-									<input
-										type="checkbox"
-										aria-label={`Include ${account.name}`}
-										checked={!account.projectionCashExcluded}
-										onChange={(e) => {
-											const excluded = !e.target.checked;
-											void run(() =>
-												include({
-													id: account._id,
-													excluded,
-													revision: account.revision,
-												}),
-											);
-										}}
-									/>
-									<span>
-										<strong>{account.name}</strong>
-										<small>
-											{account.type} · {account.linked ? "Linked" : "Manual"}
-											{account.balanceAsOf
-												? ` · Imported ${new Date(account.balanceAsOf).toLocaleString()}`
-												: ""}
-										</small>
-									</span>
-								</label>
+								<AccountForecastToggle account={account} run={run}>
+									<small>
+										{account.type} · {account.linked ? "Linked" : "Manual"}
+										{account.balanceAsOf
+											? ` · Imported ${new Date(account.balanceAsOf).toLocaleString()}`
+											: ""}
+									</small>
+								</AccountForecastToggle>
 								{!account.linked && (
 									<button
 										type="button"

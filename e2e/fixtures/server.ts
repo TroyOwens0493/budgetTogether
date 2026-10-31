@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 import { createServer } from "vite";
 import {
 	createClassificationScenario,
+	createProjectionScenario,
 	createScenario,
 	deleteScenario,
 	invokeSession,
@@ -27,6 +28,10 @@ const server = await createServer({
 					res.setHeader("Content-Type", "application/json");
 					res.setHeader("Cache-Control", "no-store");
 					try {
+						if (req.method === "POST" && req.url === "/__fixture/projections") {
+							res.end(JSON.stringify({ id: await createProjectionScenario() }));
+							return;
+						}
 						if (
 							req.method === "POST" &&
 							req.url === "/__fixture/classification"
