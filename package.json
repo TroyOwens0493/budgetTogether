@@ -29,7 +29,7 @@
     "@tanstack/react-router": "latest",
     "@tanstack/react-router-devtools": "latest",
     "@tanstack/react-start": "latest",
-    "better-auth": "~1.6.33",
+    "better-auth": "~1.6.34",
     "convex": "^1.32.0",
     "lucide-react": "^0.577.0",
     "nitro": "3.0.260610-beta",
