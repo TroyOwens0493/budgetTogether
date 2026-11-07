@@ -13,6 +13,7 @@ import * as bank from "../../convex/bank.ts";
 import * as budgets from "../../convex/budgets.ts";
 import * as classification from "../../convex/classification.ts";
 import * as investments from "../../convex/investments.ts";
+import * as sharing from "../../convex/sharing.ts";
 
 type Reference<T> =
 	T extends RegisteredQuery<infer V, infer A, infer R>
@@ -199,6 +200,13 @@ export async function invoke<T>(
 		args: Record<string, unknown>,
 	) => {
 		const [module, name] = getFunctionName(reference).split(":");
+		if (module === "sharing")
+			return invoke(
+				// biome-ignore lint/performance/noDynamicNamespaceImportAccess: Test-only function dispatcher.
+				sharing[name as keyof typeof sharing],
+				db,
+				args as never,
+			);
 		if (module === "investments")
 			return invoke(
 				// biome-ignore lint/performance/noDynamicNamespaceImportAccess: Test-only function dispatcher.
@@ -267,10 +275,46 @@ export const id = <
 		| "plans"
 		| "funds"
 		| "contributions"
-		| "bankSyncRuns",
+		| "bankSyncRuns"
+		| "invitations",
 >(
 	value: string,
 ) => value as Id<T>;
+// Seed legacy household records for accounting and deletion tests. Production
+// creates a shared budget only through invitation acceptance.
+export async function sharedBudget(db: Memory) {
+	const spaceId = id<"spaces">(
+		await db.insert("spaces", {
+			name: "Shared",
+			type: "shared",
+			ownerId: db.current,
+			timeZone: "America/Boise",
+		}),
+	);
+	await db.insert("memberships", {
+		spaceId,
+		userId: db.current,
+		active: true,
+		joinedAt: Date.now(),
+	});
+	for (const [order, name] of [
+		"Housing",
+		"Groceries",
+		"Dining out",
+		"Entertainment",
+		"Transport",
+		"Other",
+	].entries())
+		await db.insert("categories", {
+			spaceId,
+			name,
+			order,
+			color: "#90ac75",
+			revision: 0,
+		});
+	return spaceId;
+}
+
 export async function connectedAccount(
 	db: Memory,
 	spaceId: Id<"spaces">,

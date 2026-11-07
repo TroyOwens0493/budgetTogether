@@ -3,9 +3,10 @@ import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { labelError, partnerEmailError } from "../domain/validation";
+import { labelError } from "../domain/validation";
 import { openPlaid } from "../lib/plaid-link";
 import { ContributionsView } from "./ContributionsView";
+import { SharingInvites } from "./SharingInvites";
 import { ConfirmModal, Modal } from "./ui";
 import { ValidatedInput } from "./ValidatedInput";
 import type { ViewProps } from "./view-types";
@@ -22,7 +23,6 @@ export function AccountsView({
 }) {
 	const accounts = useQuery(api.accounts.list, { spaceId });
 	const connections = useQuery(api.accounts.connections, {});
-	const status = useQuery(api.sharing.status, { spaceId });
 	const link = useAction(api.bank.link);
 	const exchange = useAction(api.bank.exchange);
 	const sync = useAction(api.bank.sync);
@@ -30,10 +30,6 @@ export function AccountsView({
 	const rename = useMutation(api.accounts.rename);
 	const move = useMutation(api.accounts.move);
 	const leave = useMutation(api.sharing.leave);
-	const create = useMutation(api.sharing.create);
-	const invite = useAction(api.sharing.invite);
-	const revoke = useMutation(api.sharing.revoke);
-	const accept = useAction(api.sharing.accept);
 	const [reviewing, setReviewing] = useState<Id<"connections"> | null>(null);
 	const [leaving, setLeaving] = useState<Id<"spaces"> | null>(null);
 	const [renaming, setRenaming] = useState<
@@ -51,10 +47,7 @@ export function AccountsView({
 	const hasSharedBudget = home.spaces.some(
 		(x) => x.type === "shared" && x.active,
 	);
-	const inviteToken =
-		typeof window === "undefined"
-			? null
-			: new URLSearchParams(window.location.search).get("invite");
+
 	return (
 		<>
 			{reviewing && (
@@ -188,120 +181,17 @@ export function AccountsView({
 				))}
 				{!connections?.length && <p>No bank connections yet.</p>}
 			</section>
-			{(space.type === "shared" || !hasSharedBudget) && (
-				<section
-					className={`panel narrow${space.type === "private" ? " shared-budget-setup" : ""}`}
+			{space.type === "private" && !hasSharedBudget && (
+				<SharingInvites email={home.user.email} run={run} />
+			)}
+			{space.type === "shared" && (
+				<button
+					type="button"
+					className="danger leave-shared-budget"
+					onClick={() => setLeaving(spaceId)}
 				>
-					<h2>Your shared budget</h2>
-					{inviteToken && (
-						<div className="banner">
-							<p>
-								You have an invitation. Accept it with the email address that
-								received the invitation.
-							</p>
-							<button
-								type="button"
-								onClick={() =>
-									run(async () => {
-										await accept({ token: inviteToken });
-										window.history.replaceState(null, "", "/");
-									}, "Invitation accepted.")
-								}
-							>
-								Accept invitation
-							</button>
-						</div>
-					)}
-					{space.type === "private" ? (
-						<form
-							onSubmit={(e) => {
-								e.preventDefault();
-								void run(
-									() => create({}),
-									"Shared budget created. Select it to invite your partner.",
-								);
-							}}
-						>
-							<p>
-								You can share one budget with one partner. Each of you has equal
-								control. Your private budget remains separate.
-							</p>
-							<button type="submit">Create shared budget</button>
-						</form>
-					) : (
-						<>
-							{active && (
-								<button
-									type="button"
-									className="danger"
-									onClick={() => setLeaving(spaceId)}
-								>
-									Leave shared budget
-								</button>
-							)}
-							<p>
-								{status?.members
-									.map((x) => `${x.name}${x.active ? "" : " (left)"}`)
-									.join(" & ")}
-							</p>
-							<form
-								onSubmit={(e) => {
-									e.preventDefault();
-									const data = new FormData(e.currentTarget);
-									void run(
-										() => invite({ spaceId, email: String(data.get("email")) }),
-										"Invitation queued for email delivery.",
-									);
-								}}
-							>
-								<label htmlFor="accountsview-email">
-									Partner’s email
-									<ValidatedInput
-										id="accountsview-email"
-										aria-label="Partner’s email"
-										name="email"
-										type="email"
-										required
-										validate={(value) =>
-											partnerEmailError(value, home.user.email)
-										}
-									/>
-								</label>
-								<button
-									type="submit"
-									disabled={
-										!active ||
-										(status?.members.filter((x) => x.active).length ?? 0) >= 2
-									}
-								>
-									Send invitation
-								</button>
-							</form>
-							{status?.invitations.map((x) => (
-								<div className="alert-row" key={x._id}>
-									<span>
-										{x.email}
-										<small>
-											{x.status} · email {x.delivery} · expires{" "}
-											{new Date(x.expiresAt).toLocaleDateString()}
-										</small>
-									</span>
-									{x.status === "pending" && (
-										<button
-											type="button"
-											className="text-button"
-											onClick={() =>
-												run(() => revoke({ id: x._id }), "Invitation revoked.")
-											}
-										>
-											Revoke
-										</button>
-									)}
-								</div>
-							))}
-						</>
-					)}
-				</section>
+					Leave shared budget
+				</button>
 			)}
 			{space.type === "private" && fundedByShared && (
 				<section className="panel">

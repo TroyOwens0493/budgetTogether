@@ -3,13 +3,17 @@ import { getFunctionName } from "convex/server";
 import * as accounts from "../../convex/accounts";
 import { authComponent } from "../../convex/auth";
 import * as budgets from "../../convex/budgets";
+import * as contributions from "../../convex/contributions";
 import * as investments from "../../convex/investments";
 import * as personalAllocations from "../../convex/personalAllocations";
 import * as projections from "../../convex/projections";
 import * as sharing from "../../convex/sharing";
 import { Memory } from "./memory";
 
-type Handler = { _handler: (ctx: unknown, args: unknown) => Promise<unknown> };
+type Handler = {
+	_handler: (ctx: unknown, args: unknown) => Promise<unknown>;
+	isAction?: boolean;
+};
 const handlers = new Map<string, unknown>([
 	["budgets:home", budgets.home],
 	["budgets:setup", budgets.setup],
@@ -41,8 +45,17 @@ const handlers = new Map<string, unknown>([
 	["investments:storeReturn", investments.storeReturn],
 	["personalAllocations:list", personalAllocations.list],
 	["personalAllocations:save", personalAllocations.save],
-	["sharing:create", sharing.create],
+	["contributions:list", contributions.list],
 	["sharing:status", sharing.status],
+	["sharing:outgoing", sharing.outgoing],
+	["sharing:invite", sharing.invite],
+	["sharing:resend", sharing.resend],
+	["sharing:storeInvite", sharing.storeInvite],
+	["sharing:revoke", sharing.revoke],
+	["sharing:preview", sharing.preview],
+	["sharing:reviewHash", sharing.reviewHash],
+	["sharing:accept", sharing.accept],
+	["sharing:acceptHash", sharing.acceptHash],
 	["sharing:leave", sharing.leave],
 ]);
 const users = new WeakMap<object, string>();
@@ -57,38 +70,60 @@ Object.defineProperty(authComponent, "getAuthUser", {
 
 class Scenario {
 	db = new Memory();
+	outbox: { token: string }[] = [];
 	private queue: Promise<unknown> = Promise.resolve();
 
-	// Serialize handlers and roll back failed writes, as Convex transactions do.
+	// Serialize requests; internal calls share the same transaction context.
 	invoke(actor: string, name: string, args: unknown) {
-		const result = this.queue.then(async () => {
-			const handler = handlers.get(name) as Handler | undefined;
-			if (!handler) throw new Error(`Unsupported fixture operation: ${name}`);
-			const ctx = {
-				db: this.db,
-				scheduler: {
-					runAfter: (
-						_delay: number,
-						reference: Parameters<typeof getFunctionName>[0],
-					) => {
-						// The test seeds the result explicitly; never call external services.
-						if (getFunctionName(reference) === "investments:fetchReturn")
-							return;
-						throw new Error("External jobs are disabled in browser tests.");
-					},
-				},
-			};
-			users.set(ctx, actor);
-			const backup = structuredClone(this.db.rows);
-			try {
-				return structuredClone(await handler._handler(ctx, args));
-			} catch (error) {
-				this.db.rows = backup;
-				throw error;
-			}
-		});
+		const result = this.queue.then(() => this.execute(actor, name, args));
 		this.queue = result.catch(() => {});
 		return result;
+	}
+
+	private async execute(
+		actor: string,
+		name: string,
+		args: unknown,
+	): Promise<unknown> {
+		const handler = handlers.get(name) as Handler | undefined;
+		if (!handler) throw new Error(`Unsupported fixture operation: ${name}`);
+		const call = (
+			reference: Parameters<typeof getFunctionName>[0],
+			args: unknown,
+		) => this.execute(actor, getFunctionName(reference), args);
+		const ctx = {
+			db: this.db,
+			runQuery: call,
+			runMutation: call,
+			scheduler: {
+				runAfter: (
+					_delay: number,
+					reference: Parameters<typeof getFunctionName>[0],
+					args: unknown,
+				) => {
+					const operation = getFunctionName(reference);
+					if (operation === "investments:fetchReturn") return;
+					// Capture the simulated email; never run its external delivery action.
+					if (operation === "sharing:send") {
+						this.outbox.push(args as { token: string });
+						return;
+					}
+					throw new Error("External jobs are disabled in browser tests.");
+				},
+			},
+		};
+		users.set(ctx, actor);
+		const backup = structuredClone(this.db.rows);
+		const outbox = [...this.outbox];
+		try {
+			return structuredClone(await handler._handler(ctx, args));
+		} catch (error) {
+			if (!handler.isAction) {
+				this.db.rows = backup;
+				this.outbox = outbox;
+			}
+			throw error;
+		}
 	}
 }
 
@@ -100,7 +135,33 @@ export async function createScenario(overspending = false) {
 			name,
 			timeZone: "UTC",
 		});
-	const sharedId = await scenario.invoke("alice", "sharing:create", {});
+	const sharedId = await scenario.db.insert("spaces", {
+		name: "Shared",
+		type: "shared",
+		ownerId: "alice",
+		timeZone: "UTC",
+	});
+	await scenario.db.insert("memberships", {
+		spaceId: sharedId,
+		userId: "alice",
+		active: true,
+		joinedAt: Date.now(),
+	});
+	for (const [order, name] of [
+		"Housing",
+		"Groceries",
+		"Dining out",
+		"Entertainment",
+		"Transport",
+		"Other",
+	].entries())
+		await scenario.db.insert("categories", {
+			spaceId: sharedId,
+			name,
+			order,
+			color: "#90ac75",
+			revision: 0,
+		});
 	// Seed an accepted membership directly; no invitation or email is created.
 	await scenario.db.insert("memberships", {
 		spaceId: sharedId,
@@ -158,6 +219,22 @@ export async function createScenario(overspending = false) {
 	const id = randomUUID();
 	scenarios.set(id, scenario);
 	return id;
+}
+
+export async function createInvitationScenario() {
+	const scenario = new Scenario();
+	for (const name of ["Alice", "Bob"])
+		await scenario.invoke(name.toLowerCase(), "budgets:setup", {
+			name,
+			timeZone: "UTC",
+		});
+	const id = randomUUID();
+	scenarios.set(id, scenario);
+	return id;
+}
+
+export function latestInvitation(id: string) {
+	return scenarios.get(id)?.outbox.at(-1) ?? null;
 }
 
 export function deleteScenario(id: string) {

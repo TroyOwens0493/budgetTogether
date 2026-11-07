@@ -5,6 +5,25 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { access, label } from "../access";
 
+/** Standard categories for a new budget; no private categories are copied. */
+export async function createDefaults(ctx: MutationCtx, spaceId: Id<"spaces">) {
+	for (const [order, [name, color]] of [
+		["Housing", "#9daf87"],
+		["Groceries", "#90ac75"],
+		["Dining out", "#d5ac65"],
+		["Entertainment", "#ada9cf"],
+		["Transport", "#d89774"],
+		["Other", "#83aaa2"],
+	].entries())
+		await ctx.db.insert("categories", {
+			spaceId,
+			name,
+			color,
+			order,
+			revision: 0,
+		});
+}
+
 export async function list(ctx: QueryCtx, args: { spaceId: Id<"spaces"> }) {
 	await access(ctx, args.spaceId);
 	return ctx.db

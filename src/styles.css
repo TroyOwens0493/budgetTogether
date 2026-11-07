@@ -139,6 +139,10 @@ fieldset:disabled {
 	color: #9b3c28;
 	border: 1px solid #e8c6bc;
 }
+.leave-shared-budget {
+	display: block;
+	margin: 24px 0 0 auto;
+}
 .button-row {
 	display: flex;
 	align-items: center;
@@ -1346,4 +1350,13 @@ dialog::backdrop {
 }
 .page-actions:has(.projection-heading) {
 	justify-content: space-between;
+}
+
+.invite-review {
+	max-width: 38rem;
+	margin: 3rem auto;
+}
+.invite-review > button {
+	margin-top: 1rem;
+	margin-right: 0.75rem;
 }

@@ -5,7 +5,12 @@ import config from "../playwright.config";
 export default defineConfig({
 	...config,
 	testDir: ".",
-	testMatch: ["tasks.spec.ts", "classification.spec.ts", "projections.spec.ts"],
+	testMatch: [
+		"tasks.spec.ts",
+		"classification.spec.ts",
+		"projections.spec.ts",
+		"invitations.spec.ts",
+	],
 	testIgnore: [],
 	outputDir: fileURLToPath(new URL("../test-results-tasks", import.meta.url)),
 	reporter: [

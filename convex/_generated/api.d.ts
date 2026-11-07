@@ -29,6 +29,7 @@ import type * as model_categories from "../model/categories.js";
 import type * as model_funds from "../model/funds.js";
 import type * as model_insights from "../model/insights.js";
 import type * as model_investmentImport from "../model/investmentImport.js";
+import type * as model_invitations from "../model/invitations.js";
 import type * as model_personalFunding from "../model/personalFunding.js";
 import type * as model_plans from "../model/plans.js";
 import type * as model_projections from "../model/projections.js";
@@ -71,6 +72,7 @@ declare const fullApi: ApiFromModules<{
   "model/funds": typeof model_funds;
   "model/insights": typeof model_insights;
   "model/investmentImport": typeof model_investmentImport;
+  "model/invitations": typeof model_invitations;
   "model/personalFunding": typeof model_personalFunding;
   "model/plans": typeof model_plans;
   "model/projections": typeof model_projections;

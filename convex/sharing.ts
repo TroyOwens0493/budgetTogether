@@ -1,70 +1,20 @@
 import { ConvexError, v } from "convex/values";
-import { partnerEmailError } from "../src/domain/validation";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import {
 	action,
 	internalAction,
 	internalMutation,
+	internalQuery,
 	mutation,
 	query,
 } from "./_generated/server";
-import { access, user } from "./access";
+import { access } from "./access";
 import { sendEmail } from "./email";
+import * as invitations from "./model/invitations";
 import * as sharedDeletion from "./model/sharedDeletion";
 import { hash } from "./plaidClient";
 
-async function activeShared(ctx: Parameters<typeof user>[0], userId: string) {
-	const rows = await ctx.db
-		.query("memberships")
-		.withIndex("by_user", (q) => q.eq("userId", userId))
-		.collect();
-	for (const m of rows)
-		if (m.active && (await ctx.db.get(m.spaceId))?.type === "shared")
-			return m.spaceId;
-	return null;
-}
-export const create = mutation({
-	args: {},
-	handler: async (ctx) => {
-		const current = await user(ctx);
-		if (await activeShared(ctx, current._id))
-			throw new ConvexError("You already have an active shared budget.");
-		const profile = await ctx.db
-			.query("profiles")
-			.withIndex("by_user", (q) => q.eq("userId", current._id))
-			.unique();
-		if (!profile) throw new ConvexError("Complete account setup first.");
-		const spaceId = await ctx.db.insert("spaces", {
-			name: "Shared",
-			type: "shared",
-			ownerId: current._id,
-			timeZone: profile.timeZone,
-		});
-		await ctx.db.insert("memberships", {
-			spaceId,
-			userId: current._id,
-			active: true,
-			joinedAt: Date.now(),
-		});
-		for (const [order, name] of [
-			"Housing",
-			"Groceries",
-			"Dining out",
-			"Entertainment",
-			"Transport",
-			"Other",
-		].entries())
-			await ctx.db.insert("categories", {
-				spaceId,
-				name,
-				order,
-				color: "#90ac75",
-				revision: 0,
-			});
-		return spaceId;
-	},
-});
 export const status = query({
 	args: { spaceId: v.id("spaces") },
 	handler: async (ctx, args) => {
@@ -98,111 +48,82 @@ export const status = query({
 		};
 	},
 });
+function inviteToken() {
+	return [...crypto.getRandomValues(new Uint8Array(32))]
+		.map((x) => x.toString(16).padStart(2, "0"))
+		.join("");
+}
+
+function requireEmailSetup() {
+	if (
+		!process.env.RESEND_API_KEY ||
+		!process.env.RESEND_FROM ||
+		!process.env.SITE_URL
+	)
+		throw new ConvexError(
+			"Invitation emails are not configured yet. Please try again later.",
+		);
+}
+
+export const outgoing = query({
+	args: {},
+	handler: invitations.outgoing,
+});
+
 export const invite = action({
-	args: { spaceId: v.id("spaces"), email: v.string() },
+	args: { email: v.string() },
 	handler: async (ctx, args): Promise<void> => {
-		const token = [...crypto.getRandomValues(new Uint8Array(32))]
-			.map((x) => x.toString(16).padStart(2, "0"))
-			.join("");
-		const id = await ctx.runMutation(internal.sharing.storeInvite, {
+		requireEmailSetup();
+		const token = inviteToken();
+		await ctx.runMutation(internal.sharing.storeInvite, {
 			...args,
+			token,
 			tokenHash: await hash(token),
 		});
-		await ctx.scheduler.runAfter(0, internal.sharing.deliver, { id, token });
 	},
 });
+
+export const resend = action({
+	args: { id: v.id("invitations") },
+	handler: async (ctx, args): Promise<void> => {
+		requireEmailSetup();
+		const token = inviteToken();
+		await ctx.runMutation(internal.sharing.storeInvite, {
+			...args,
+			token,
+			tokenHash: await hash(token),
+		});
+	},
+});
+
 export const storeInvite = internalMutation({
-	args: { spaceId: v.id("spaces"), email: v.string(), tokenHash: v.string() },
-	handler: async (ctx, args) => {
-		const { current, space } = await access(ctx, args.spaceId);
-		if (space.type !== "shared")
-			throw new ConvexError("Invite a partner from a shared budget.");
-		const email = args.email.trim().toLowerCase();
-		const error = partnerEmailError(email, current.email);
-		if (error) throw new ConvexError(error);
-		const members = await ctx.db
-			.query("memberships")
-			.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
-			.collect();
-		if (members.filter((x) => x.active).length >= 2)
-			throw new ConvexError("This shared budget already has two members.");
-		for (const old of await ctx.db
-			.query("invitations")
-			.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
-			.collect())
-			if (old.status === "pending")
-				await ctx.db.patch(old._id, { status: "revoked" });
-		return ctx.db.insert("invitations", {
-			spaceId: args.spaceId,
-			inviterId: current._id,
-			email,
-			tokenHash: args.tokenHash,
-			expiresAt: Date.now() + 7 * 86400000,
-			status: "pending",
-			delivery: "queued",
-		});
+	args: {
+		email: v.optional(v.string()),
+		id: v.optional(v.id("invitations")),
+		token: v.string(),
+		tokenHash: v.string(),
 	},
+	handler: invitations.queue,
 });
-export const deliver = internalAction({
-	args: { id: v.id("invitations"), token: v.string() },
-	handler: async (ctx, args): Promise<void> => {
-		await ctx.runMutation(internal.sharing.delivery, {
-			id: args.id,
-			token: args.token,
-		});
-	},
-});
-// Email IO must happen in an action, separate from the database mutation.
-export const delivery = internalMutation({
-	args: { id: v.id("invitations"), token: v.string() },
-	handler: async (ctx, args) => {
-		const invite = await ctx.db.get(args.id);
-		if (!invite || invite.status !== "pending") return;
-		await ctx.scheduler.runAfter(0, internal.sharing.send, {
-			id: args.id,
-			email: invite.email,
-			token: args.token,
-		});
-	},
-});
-export const send = internalAction({
-	args: { id: v.id("invitations"), email: v.string(), token: v.string() },
-	handler: async (ctx, args): Promise<void> => {
-		try {
-			await sendEmail(
-				args.email,
-				"Join a shared budget on Budget Together",
-				`You have been invited to share a budget. Sign in with this email address, then accept the invitation:\n${process.env.SITE_URL}/?invite=${args.token}\nThis link expires in 7 days.`,
-				String(args.id),
-			);
-			await ctx.runMutation(internal.sharing.markDelivery, {
-				id: args.id,
-				status: "sent",
-			});
-		} catch {
-			await ctx.runMutation(internal.sharing.markDelivery, {
-				id: args.id,
-				status: "failed",
-			});
-		}
-	},
-});
-export const markDelivery = internalMutation({
-	args: { id: v.id("invitations"), status: v.string() },
-	handler: async (ctx, args) => {
-		if (await ctx.db.get(args.id))
-			await ctx.db.patch(args.id, { delivery: args.status });
-	},
-});
+
 export const revoke = mutation({
 	args: { id: v.id("invitations") },
-	handler: async (ctx, args) => {
-		const invite = await ctx.db.get(args.id);
-		if (!invite) throw new ConvexError("Invitation not found.");
-		await access(ctx, invite.spaceId);
-		await ctx.db.patch(args.id, { status: "revoked" });
-	},
+	handler: (ctx, args) => invitations.revoke(ctx, args.id),
 });
+
+export const preview = action({
+	args: { token: v.string() },
+	handler: async (ctx, args): Promise<invitations.Review> =>
+		ctx.runQuery(internal.sharing.reviewHash, {
+			tokenHash: await hash(args.token),
+		}),
+});
+
+export const reviewHash = internalQuery({
+	args: { tokenHash: v.string() },
+	handler: (ctx, args) => invitations.review(ctx, args.tokenHash),
+});
+
 export const accept = action({
 	args: { token: v.string() },
 	handler: async (ctx, args): Promise<Id<"spaces">> =>
@@ -210,54 +131,56 @@ export const accept = action({
 			tokenHash: await hash(args.token),
 		}),
 });
+
 export const acceptHash = internalMutation({
 	args: { tokenHash: v.string() },
-	handler: async (ctx, args) => {
-		const current = await user(ctx);
-		const invite = await ctx.db
-			.query("invitations")
-			.withIndex("by_hash", (q) => q.eq("tokenHash", args.tokenHash))
-			.unique();
-		if (
-			!invite ||
-			invite.status !== "pending" ||
-			invite.expiresAt < Date.now() ||
-			invite.email !== current.email.toLowerCase()
-		)
-			throw new ConvexError(
-				"This invitation is invalid, expired, or belongs to another email address.",
+	handler: (ctx, args) => invitations.accept(ctx, args.tokenHash),
+});
+
+export const delivery = internalQuery({
+	args: { id: v.id("invitations"), tokenHash: v.string() },
+	handler: (ctx, args) => invitations.delivery(ctx, args.id, args.tokenHash),
+});
+
+export const send = internalAction({
+	args: { id: v.id("invitations"), token: v.string() },
+	handler: async (ctx, args): Promise<void> => {
+		const tokenHash = await hash(args.token);
+		const delivery = await ctx.runQuery(internal.sharing.delivery, {
+			id: args.id,
+			tokenHash,
+		});
+		if (!delivery) return;
+		let status: "sent" | "failed" = "failed";
+		try {
+			requireEmailSetup();
+			const url = new URL("/", process.env.SITE_URL);
+			url.searchParams.set("invite", args.token);
+			await sendEmail(
+				delivery.email,
+				`${delivery.inviterName} invited you to Budget Together`,
+				`${delivery.inviterName} invited you to create a shared budget on Budget Together.\n\nOpen this link, then sign in or create an account with ${delivery.email}:\n${url.href}\n\nReview and accept the invitation to create your shared budget. Your private budgets stay separate, and you choose which accounts to move.\n\nThis invitation expires in 7 days. If you did not expect it, you can ignore this email.`,
+				`invite-${args.id}-${tokenHash}`,
 			);
-		if (await activeShared(ctx, current._id))
-			throw new ConvexError(
-				"Leave your existing shared budget before joining another.",
-			);
-		const members = await ctx.db
-			.query("memberships")
-			.withIndex("by_space", (q) => q.eq("spaceId", invite.spaceId))
-			.collect();
-		if (members.filter((x) => x.active).length >= 2)
-			throw new ConvexError("This budget is full.");
-		const inviter = members.find(
-			(x) => x.userId === invite.inviterId && x.active,
-		);
-		if (!inviter) throw new ConvexError("The inviter is no longer a member.");
-		const previous = members.find((x) => x.userId === current._id);
-		if (previous)
-			await ctx.db.patch(previous._id, {
-				active: true,
-				joinedAt: Date.now(),
-				leftAt: undefined,
-			});
-		else
-			await ctx.db.insert("memberships", {
-				spaceId: invite.spaceId,
-				userId: current._id,
-				active: true,
-				joinedAt: Date.now(),
-			});
-		await ctx.db.patch(invite._id, { status: "accepted" });
-		return invite.spaceId;
+			status = "sent";
+		} catch {
+			// The sender can retry through Resend without creating a budget or losing the invite.
+		}
+		await ctx.runMutation(internal.sharing.markDelivery, {
+			id: args.id,
+			tokenHash,
+			status,
+		});
 	},
+});
+
+export const markDelivery = internalMutation({
+	args: {
+		id: v.id("invitations"),
+		tokenHash: v.string(),
+		status: v.union(v.literal("sent"), v.literal("failed")),
+	},
+	handler: invitations.markDelivery,
 });
 
 export const leave = mutation({

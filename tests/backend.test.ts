@@ -12,6 +12,7 @@ import {
 	fixture,
 	id,
 	invoke,
+	sharedBudget,
 } from "./helpers/backend.ts";
 
 test("private budget reads and edits are denied to another user", async () => {
@@ -132,7 +133,7 @@ test("recurring suggestion decisions persist without creating duplicate states",
 
 test("shared alerts use posted spending and keep read state separate for each partner", async () => {
 	const { db } = await fixture();
-	const spaceId = await invoke(sharing.create, db, {});
+	const spaceId = await sharedBudget(db);
 	await db.insert("memberships", {
 		spaceId,
 		userId: "bob",
@@ -379,7 +380,7 @@ test("existing budget records remain readable and migrate on save", async () => 
 });
 test("planned contributions can change after saving and both budgets must be saved again", async () => {
 	const { db, privateId, categoryId } = await fixture();
-	const sharedId = await invoke(sharing.create, db, {});
+	const sharedId = await sharedBudget(db);
 	const personal = {
 		spaceId: privateId,
 		month: "2026-09",
@@ -456,7 +457,7 @@ test("planned contributions can change after saving and both budgets must be sav
 });
 test("sharing preserves private history and leaving deletes shared history", async () => {
 	const { db, privateId, accountId } = await fixture();
-	const sharedId = await invoke(sharing.create, db, {});
+	const sharedId = await sharedBudget(db);
 	const before = await entry(db, privateId, accountId, 100, "transfer");
 	await invoke(accounts.move, db, {
 		id: accountId,
@@ -489,7 +490,7 @@ test("sharing preserves private history and leaving deletes shared history", asy
 });
 test("contribution matches cancel across budgets and stop counting when a bank correction invalidates them", async () => {
 	const { db, privateId, accountId } = await fixture();
-	const sharedId = await invoke(sharing.create, db, {});
+	const sharedId = await sharedBudget(db);
 	const sharedAccount = await connectedAccount(db, sharedId, "Shared checking");
 	const outId = await entry(db, privateId, accountId, 30000, "transfer");
 	const inId = await entry(db, sharedId, sharedAccount, -30000, "income");
@@ -772,7 +773,7 @@ test("possible duplicates pause imports and require an explicit same or differen
 });
 test("partner duplicate checks do not expose private names and preserve other selected accounts", async () => {
 	const { db, privateId } = await fixture();
-	const sharedId = await invoke(sharing.create, db, {});
+	const sharedId = await sharedBudget(db);
 	await db.insert("memberships", {
 		spaceId: sharedId,
 		userId: "bob",
@@ -841,7 +842,7 @@ test("partner duplicate checks do not expose private names and preserve other se
 async function fundedHousehold() {
 	const fixtureData = await fixture();
 	const { db } = fixtureData;
-	const sharedId = await invoke(sharing.create, db, {});
+	const sharedId = await sharedBudget(db);
 	const membership = [...db.rows.values()].find(
 		(x) => x.spaceId === sharedId && x.userId === "alice",
 	)!;

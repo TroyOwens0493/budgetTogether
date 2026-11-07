@@ -3,8 +3,13 @@ import test from "node:test";
 import type { Id } from "../convex/_generated/dataModel";
 import * as bank from "../convex/bank.ts";
 import * as budgets from "../convex/budgets.ts";
-import * as sharing from "../convex/sharing.ts";
-import { fixture, id, invoke, type Memory } from "./helpers/backend.ts";
+import {
+	fixture,
+	id,
+	invoke,
+	type Memory,
+	sharedBudget,
+} from "./helpers/backend.ts";
 
 const month = "2026-09";
 
@@ -50,7 +55,7 @@ test("an overdrawn fund cannot release nonexistent reserves as available leftove
 
 test("partners share fund edits and former members cannot read or edit funds", async () => {
 	const { db } = await fixture();
-	const spaceId = await invoke(sharing.create, db, {});
+	const spaceId = await sharedBudget(db);
 	const membership = await db.insert("memberships", {
 		spaceId,
 		userId: "bob",

@@ -7,6 +7,9 @@ import {
 import { authClient } from "../lib/auth-client";
 import { ValidatedInput } from "./ValidatedInput";
 export function Auth() {
+	const invited =
+		typeof window !== "undefined" &&
+		new URLSearchParams(window.location.search).has("invite");
 	const token =
 		typeof window === "undefined"
 			? null
@@ -82,6 +85,14 @@ export function Auth() {
 						}
 					</h2>
 				)}
+				{invited && (
+					<p className="banner">
+						You have an invitation to create a shared budget. Sign in or create
+						an account with the email address that received it. You can review
+						the invitation before accepting.
+					</p>
+				)}
+
 				<form onSubmit={submit}>
 					{mode === "register" && (
 						<label htmlFor="auth-name">

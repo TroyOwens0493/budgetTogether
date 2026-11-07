@@ -66,7 +66,7 @@ export default defineSchema({
 		.index("by_user", ["userId"])
 		.index("by_space", ["spaceId"]),
 	invitations: defineTable({
-		spaceId: v.id("spaces"),
+		spaceId: v.optional(v.id("spaces")),
 		inviterId: v.string(),
 		email: v.string(),
 		tokenHash: v.string(),
@@ -79,6 +79,7 @@ export default defineSchema({
 		delivery: v.string(),
 	})
 		.index("by_hash", ["tokenHash"])
+		.index("by_inviter", ["inviterId", "status"])
 		.index("by_space", ["spaceId"]),
 	connections: defineTable({
 		userId: v.string(),

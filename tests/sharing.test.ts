@@ -14,11 +14,12 @@ import {
 	id,
 	invoke,
 	type Memory,
+	sharedBudget,
 } from "./helpers/backend.ts";
 
 async function household() {
 	const f = await fixture();
-	const sharedId = await invoke(sharing.create, f.db, {});
+	const sharedId = await sharedBudget(f.db);
 	// Fix the history dates so tests do not depend on the current month.
 	for (const row of f.db.rows.values())
 		if (row._id.startsWith("memberships:") && row.spaceId === sharedId)
@@ -264,7 +265,6 @@ test("either partner can delete the shared budget, its records and both membersh
 				}),
 			/not found/,
 		);
-		assert.ok(await invoke(sharing.create, db, {}));
 	}
 });
 

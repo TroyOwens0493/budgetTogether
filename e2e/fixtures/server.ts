@@ -4,11 +4,18 @@ import react from "@vitejs/plugin-react";
 import { createServer } from "vite";
 import {
 	createClassificationScenario,
+	createInvitationScenario,
 	createProjectionScenario,
 	createScenario,
 	deleteScenario,
 	invokeSession,
+	latestInvitation,
 } from "./backend";
+
+// Fixture-only values pass configuration checks. No email delivery job is executed.
+process.env.RESEND_API_KEY = "fixture-no-network";
+process.env.RESEND_FROM = "budget@example.test";
+process.env.SITE_URL = "http://127.0.0.1:3100";
 
 const root = fileURLToPath(new URL("../..", import.meta.url));
 const port = Number(process.env.BUDGET_TASK_PORT ?? 3100);
@@ -28,6 +35,24 @@ const server = await createServer({
 					res.setHeader("Content-Type", "application/json");
 					res.setHeader("Cache-Control", "no-store");
 					try {
+						if (req.method === "POST" && req.url === "/__fixture/invitations") {
+							res.end(JSON.stringify({ id: await createInvitationScenario() }));
+							return;
+						}
+						if (
+							req.method === "GET" &&
+							req.url.startsWith("/__fixture/invitation/")
+						) {
+							res.end(
+								JSON.stringify(
+									latestInvitation(
+										req.url.slice("/__fixture/invitation/".length),
+									),
+								),
+							);
+							return;
+						}
+
 						if (req.method === "POST" && req.url === "/__fixture/projections") {
 							res.end(JSON.stringify({ id: await createProjectionScenario() }));
 							return;

@@ -22,7 +22,7 @@ contexts. An HTTP-only test session cookie supplies identity. Tests use the real
 accounting, and revision checks. The fixture substitutes a small database adapter
 and a polling transport for Convex, and starts after authentication. It does not
 test Better Auth login, Convex subscriptions, indexes, argument validators, or
-deployed service integration. External actions and scheduled jobs fail closed.
+deployed service integration. Unregistered external actions and scheduled jobs fail closed. Invitation actions run the real handlers; the fixture captures scheduled email links without sending email.
 
 The tests cover balanced saves, reopening, reload, repeat saves, invalid amounts,
 shared-to-personal funding, saving both budgets again, and concurrent plan and
@@ -30,6 +30,13 @@ funding edits by two members. They use accessible labels and public navigation,
 so moving `PlanView` to its own module needs no test changes.
 They also check the leave confirmation, cancellation, and removal of a shared
 budget from both open sessions and after reload.
+
+Invitation tests start with two private budgets. They cover sending without creating
+a shared budget, recipient review, explicit acceptance, default categories, updates
+in both sessions, reload, wrong-account links, replacement links, and cancellation.
+The Node tests check expiry, single pending invites, acceptance rollback, membership
+conflicts, cancellation of the recipient's outgoing invite, and mocked Resend requests.
+Actual email receipt still needs a live delivery check.
 
 Classification tests cover pending labels, uncertain answers marked for review,
 manual review that persists after reload, and editing an uncategorized import.

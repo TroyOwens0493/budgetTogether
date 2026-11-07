@@ -18,6 +18,7 @@ import { AccountsView } from "./AccountsView";
 import { BudgetReadBoundary } from "./BudgetReadBoundary";
 import { ErrorBanner } from "./ErrorBanner";
 import { FundsView } from "./FundsView";
+import { InviteReview } from "./InviteReview";
 import { OverviewView } from "./OverviewView";
 import { PlanView } from "./PlanView";
 import { ProfileView } from "./ProfileView";
@@ -51,6 +52,21 @@ function BudgetAppContent({ home }: { home: Home }) {
 			home.spaces.find((x) => x.active)?._id ??
 			home.spaces[0]._id,
 	);
+	const [inviteToken, setInviteToken] = useState(() =>
+		typeof window === "undefined"
+			? null
+			: new URLSearchParams(window.location.search).get("invite"),
+	);
+	const [acceptedSpace, setAcceptedSpace] = useState<Id<"spaces"> | null>(null);
+	useEffect(() => {
+		if (
+			acceptedSpace &&
+			home.spaces.some((space) => space._id === acceptedSpace)
+		) {
+			setSelected(acceptedSpace);
+			setAcceptedSpace(null);
+		}
+	}, [acceptedSpace, home.spaces]);
 	const space = home.spaces.find((x) => x._id === selected) ?? home.spaces[0];
 	useEffect(() => {
 		if (selected !== space._id) setSelected(space._id);
@@ -93,6 +109,22 @@ function BudgetAppContent({ home }: { home: Home }) {
 	}, [space._id, space.active, month, ensureMonth]);
 	const props = { spaceId: space._id, month, active: space.active, run };
 	const alerts = useAlerts(props);
+	if (inviteToken)
+		return (
+			<InviteReview
+				token={inviteToken}
+				email={home.user.email}
+				onClose={() => setInviteToken(null)}
+				onAccepted={(spaceId) => {
+					setAcceptedSpace(spaceId);
+					setInviteToken(null);
+					setNotice(
+						"Shared budget created. Choose which accounts to move in Accounts & settings.",
+					);
+				}}
+			/>
+		);
+
 	return (
 		<div className="app-shell">
 			<aside className="sidebar">

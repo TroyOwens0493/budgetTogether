@@ -2,6 +2,7 @@ import { ConvexError } from "convex/values";
 import { timeZoneError } from "../../src/domain/validation";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { label, user } from "../access";
+import { createDefaults } from "./categories";
 
 export async function setup(
 	ctx: MutationCtx,
@@ -39,23 +40,7 @@ export async function setup(
 		active: true,
 		joinedAt: Date.now(),
 	});
-	for (const [order, name] of [
-		"Housing",
-		"Groceries",
-		"Dining out",
-		"Entertainment",
-		"Transport",
-		"Other",
-	].entries())
-		await ctx.db.insert("categories", {
-			spaceId,
-			name,
-			color: ["#9daf87", "#90ac75", "#d5ac65", "#ada9cf", "#d89774", "#83aaa2"][
-				order
-			],
-			order,
-			revision: 0,
-		});
+	await createDefaults(ctx, spaceId);
 }
 
 export async function home(ctx: QueryCtx) {

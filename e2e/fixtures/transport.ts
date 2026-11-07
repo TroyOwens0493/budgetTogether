@@ -80,9 +80,17 @@ export function useMutation<F extends FunctionReference<"mutation">>(
 	);
 }
 
-// Imported by the account screen; external actions are deliberately unavailable.
-export function useAction() {
-	return useCallback(async () => {
-		throw new Error("External actions are disabled in browser tests.");
-	}, []);
+// Only registered fixture handlers can run. External provider actions stay disabled.
+export function useAction<F extends FunctionReference<"action">>(
+	reference: F,
+): (args: FunctionArgs<F>) => Promise<FunctionReturnType<F>> {
+	const name = getFunctionName(reference);
+	return useCallback(
+		async (args: FunctionArgs<F>) => {
+			const result = await invoke(name, args);
+			changes.dispatchEvent(new Event("commit"));
+			return result;
+		},
+		[name],
+	);
 }

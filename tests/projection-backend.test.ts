@@ -11,13 +11,12 @@ import * as investments from "../convex/investments.ts";
 import { today } from "../convex/model/projections.ts";
 import { encrypt, selectAccount } from "../convex/plaidClient.ts";
 import * as projections from "../convex/projections.ts";
-import * as sharing from "../convex/sharing.ts";
 import {
 	holdingForecastErrors,
 	prepareProjection,
 } from "../src/components/projection-data.ts";
 import { addMonths } from "../src/domain/projections.ts";
-import { fixture, id, invoke } from "./helpers/backend.ts";
+import { fixture, id, invoke, sharedBudget } from "./helpers/backend.ts";
 
 async function forecastFixture() {
 	const data = await fixture();
@@ -268,7 +267,7 @@ test("manual holdings and settings require budget access and current revisions",
 test("moving an investment account shares only its current assignment", async () => {
 	const { db, privateId } = await forecastFixture();
 	await invoke(projections.saveHolding, db, { ...input, spaceId: privateId });
-	const sharedId = await invoke(sharing.create, db, {});
+	const sharedId = await sharedBudget(db);
 	const data = await invoke(projections.list, db, { spaceId: privateId });
 	const account = data.accounts.find((a) => a.investment);
 	assert.ok(account);

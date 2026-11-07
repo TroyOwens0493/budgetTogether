@@ -20,7 +20,7 @@ Set the variables described in `.env.example` on that Convex development deploym
 
 `pnpm dev` generates backend types and syncs the Convex development deployment before starting the web server. Keep it running to watch and update both the backend and the web app. Ctrl+C stops both processes. No separate `convex dev` terminal is needed.
 
-Open http://localhost:3000. Local authentication also accepts http://127.0.0.1:3000 and http://[::1]:3000 on the same port. Create an account and private budget. Connect a bank, add a monthly plan, and optionally create a shared budget and invite a partner.
+Open http://localhost:3000. Local authentication also accepts http://127.0.0.1:3000 and http://[::1]:3000 on the same port. Create an account and private budget. Connect a bank and add a monthly plan. To start a shared budget, send an invitation from Accounts & settings. The recipient signs in or creates an account, then reviews and accepts the invitation.
 
 `pnpm dev` stops with an error if port `3000` is already in use. It does not switch to a different port. If the app is already running, use that server.
 
@@ -49,7 +49,7 @@ This branch uses **Plaid Sandbox only**. It loads Plaid Link from Plaid's hosted
 
 The bank event endpoint is `https://<development-deployment>.convex.site/bank-events`. Requests require Plaid's ES256 signature, a recent timestamp, and a matching SHA-256 request-body hash. Bank events trigger imports. A six-hour scheduled job retries active connections. Sync errors retain imported history, show the last successful import, and provide reconnect controls. Disconnecting removes the Plaid Item and retains app history.
 
-Resend sends partner invitations and password reset emails. Configure a verified sender domain and `RESEND_FROM`. Invitation delivery status appears in account settings; a failed invitation can be revoked and replaced. Invitations expire after seven days, require the recipient's email address, and become membership only after acceptance. Reset links use Better Auth's expiration and single-use token handling.
+Resend sends partner invitations and password reset emails. Configure a verified sender domain and `RESEND_FROM`. Invitation delivery status appears in account settings. Users can have one pending outgoing invitation and can cancel or resend it. Resending replaces the old link and starts a fresh seven-day period. The recipient must sign in or create an account with the exact invited email address, then explicitly accept. Acceptance creates the shared budget, adds both members together, and cancels the recipient's pending outgoing invitation. Default categories are included; no private plans, transactions, or accounts are copied. Either person already having a shared budget blocks acceptance without changing that existing budget. A failed email leaves a retryable invitation and creates no budget. Reset links use Better Auth's expiration and single-use token handling.
 
 ## Projections
 
@@ -91,6 +91,7 @@ The app applies Jev's best answer and marks it **Needs review** if type confiden
 
 ## Agreed product choices
 
+- Shared budgets are created only when an email invitation is accepted. New shared budgets include the default categories, with no monthly plans, transactions, or assigned accounts.
 - Shared budgets are called **Shared**. Users do not choose a name. Existing shared budgets also appear as **Shared**.
 - Bank accounts start private. Account moves apply to transactions dated from the move date onward. Previously imported records stay in their original budget; earlier private history is never shared.
 - Leaving permanently deletes the shared budget and its records for both people, overriding history retention in the PDF. Former memberships provide no read access and do not appear in the budget selector. Both partners' shared accounts return to their own private budgets. Private records and bank connections remain. Old bank imports from deleted shared periods are ignored. Only bank transaction identifiers are retained to prevent deleted entries and pending replacements from being imported again; no budget or transaction content is kept in these markers. Large transaction histories are deleted in background batches after access is removed.
@@ -139,7 +140,7 @@ The model modules do not register Convex API functions. `src/domain/budget.ts` c
 | `auth` and `/api/auth/*` | Registration, sign-in/out, password reset, profile and password changes through Better Auth |
 | `budgets` | Setup, dashboard, category CRUD and reassignment, budget save/repeat, transaction search/pagination/CRUD/splits, reconciliation, monthly review, reports, recurring suggestions, alerts |
 | `accounts` | Authorized account lists, names, assignment moves, connection status |
-| `sharing` | Shared-budget creation, email invitations, acceptance, revocation, leave |
+| `sharing` | Send/cancel/resend email invitations, recipient review, shared-budget creation on acceptance, leave |
 | `personalAllocations` | Shared-to-personal monthly funding amounts; both partners can edit |
 | `contributions` | Legacy funding and bank matches for historical months |
 | `bank` | Link/update sessions, public-token exchange, sync, disconnect, internal imports |
