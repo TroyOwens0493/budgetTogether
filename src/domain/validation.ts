@@ -28,9 +28,10 @@ export function timeZoneError(value: string): string {
 
 export function partnerEmailError(value: string, ownEmail: string): string {
 	const email = value.trim().toLowerCase();
-	return !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
-		email === ownEmail.toLowerCase()
-		? "Enter your partner’s email address."
+	if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email))
+		return "Enter your partner’s email address.";
+	return email === ownEmail.trim().toLowerCase()
+		? "You cannot invite yourself."
 		: "";
 }
 

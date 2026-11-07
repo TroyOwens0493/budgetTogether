@@ -38,10 +38,15 @@ test("category names use trimmed, case-insensitive uniqueness and allow the curr
 });
 
 test("invitations reject the sender's email and email domains without a dot", () => {
-	assert.notEqual(
-		partnerEmailError(" ALICE@example.com ", "alice@example.com"),
-		"",
-	);
+	for (const [recipient, sender] of [
+		["alice@example.com", "alice@example.com"],
+		[" ALICE@example.com ", "alice@example.com"],
+		["alice@example.com", " ALICE@EXAMPLE.COM "],
+	])
+		assert.equal(
+			partnerEmailError(recipient, sender),
+			"You cannot invite yourself.",
+		);
 	assert.notEqual(partnerEmailError("bob@localhost", "alice@example.com"), "");
 	assert.equal(partnerEmailError(" BOB@example.com ", "alice@example.com"), "");
 });

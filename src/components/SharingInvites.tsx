@@ -11,6 +11,7 @@ export function SharingInvites({ email, run }: { email: string; run: Run }) {
 	const resend = useAction(api.sharing.resend);
 	const revoke = useMutation(api.sharing.revoke);
 	const [recipient, setRecipient] = useState("");
+	const recipientError = partnerEmailError(recipient, email);
 	const [busy, setBusy] = useState(false);
 	const inFlight = useRef(false);
 	async function perform(work: () => Promise<unknown>, success: string) {
@@ -90,6 +91,7 @@ export function SharingInvites({ email, run }: { email: string; run: Run }) {
 				<form
 					onSubmit={(event) => {
 						event.preventDefault();
+						if (recipientError) return;
 						void perform(
 							() => invite({ email: recipient }),
 							"Invitation email queued.",
@@ -114,7 +116,7 @@ export function SharingInvites({ email, run }: { email: string; run: Run }) {
 							They can create an account if needed. The invitation lasts seven
 							days.
 						</p>
-						<button type="submit">
+						<button type="submit" disabled={Boolean(recipientError)}>
 							{busy ? "Sending…" : "Send invitation"}
 						</button>
 					</fieldset>

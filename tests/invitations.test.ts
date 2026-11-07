@@ -372,7 +372,15 @@ test("Resend failures leave a retryable invite and cancelled jobs send no email"
 test("self-invites and missing email configuration do not create invitations", async (t) => {
 	emailSetup(t);
 	const { db } = await fixture();
-	await assert.rejects(() => queue(db, "ALICE@example.com"), /partner’s email/);
+	for (const email of [
+		"alice@example.com",
+		"ALICE@EXAMPLE.COM",
+		" alice@example.com ",
+	])
+		await assert.rejects(
+			() => invoke(sharing.invite, db, { email }),
+			/You cannot invite yourself/,
+		);
 	delete process.env.RESEND_API_KEY;
 	await assert.rejects(
 		() => invoke(sharing.invite, db, { email: "bob@example.com" }),

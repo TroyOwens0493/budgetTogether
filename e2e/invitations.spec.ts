@@ -54,6 +54,39 @@ async function openInvites(page: Page) {
 	).toBeVisible();
 }
 
+test("self-invites show a clear error and cannot be submitted", async ({
+	invites: { alice },
+}) => {
+	await openInvites(alice);
+	const recipient = alice.getByLabel("Partner’s email");
+	const send = alice.getByRole("button", {
+		name: "Send invitation",
+		exact: true,
+	});
+	for (const address of [
+		"alice@example.test",
+		"ALICE@EXAMPLE.TEST",
+		" alice@example.test ",
+	]) {
+		await recipient.fill(address);
+		await expect(
+			alice.getByText("You cannot invite yourself.", { exact: true }),
+		).toBeVisible();
+		await expect(send).toBeDisabled();
+	}
+	await expect(
+		alice.getByRole("button", { name: "Resend invitation", exact: true }),
+	).toHaveCount(0);
+	await expect(alice.getByLabel("Budget space").locator("option")).toHaveCount(
+		1,
+	);
+	await recipient.fill("bob@example.test");
+	await expect(send).toBeEnabled();
+	await expect(
+		alice.getByText("You cannot invite yourself.", { exact: true }),
+	).toHaveCount(0);
+});
+
 test("send, review and accept creates a shared budget for both sessions with default categories", async ({
 	invites: { alice, bob, link },
 }) => {
