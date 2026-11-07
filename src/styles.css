@@ -338,6 +338,12 @@ fieldset:disabled {
 	margin-bottom: 22px;
 	min-width: 0;
 }
+.shared-budget-setup > h2 {
+	margin-bottom: 8px;
+}
+.shared-budget-setup > form > p {
+	margin: 0 0 20px;
+}
 .dashboard-grid {
 	display: grid;
 	grid-template-columns: 1.5fr 1fr;

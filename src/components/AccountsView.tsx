@@ -189,7 +189,9 @@ export function AccountsView({
 				{!connections?.length && <p>No bank connections yet.</p>}
 			</section>
 			{(space.type === "shared" || !hasSharedBudget) && (
-				<section className="panel narrow">
+				<section
+					className={`panel narrow${space.type === "private" ? " shared-budget-setup" : ""}`}
+				>
 					<h2>Your shared budget</h2>
 					{inviteToken && (
 						<div className="banner">
