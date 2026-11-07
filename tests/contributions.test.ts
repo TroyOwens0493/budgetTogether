@@ -269,7 +269,7 @@ test("the server uses the shared time zone for the join month and keeps shared-f
 	assert.deepEqual(empty.suggestions, []);
 });
 
-test("former members can read earlier contributions but cannot edit or see records added after departure", async () => {
+test("former members cannot read or edit contribution history", async () => {
 	const { db, membershipId } = await fixture();
 	const month = "2026-08";
 	const legacy = await legacyRecord(db, month);
@@ -282,17 +282,10 @@ test("former members can read earlier contributions but cannot edit or see recor
 		],
 	});
 	await db.patch(membershipId, { active: false, leftAt });
-	const data = await invoke(contributions.list, db, {
-		privateId,
-		sharedId,
-		month,
-	});
-	assert.equal(data.canEdit, false);
-	assert.equal(data.contribution?.planned, 5000);
-	assert.deepEqual(data.contribution?.pairs, [
-		{ outId: legacy.outId, inId: legacy.inId, amount: 5000 },
-	]);
-	assert.deepEqual(data.suggestions, []);
+	await assert.rejects(
+		() => invoke(contributions.list, db, { privateId, sharedId, month }),
+		/access/,
+	);
 	await assert.rejects(
 		() =>
 			invoke(contributions.savePlanned, db, {
@@ -318,16 +311,6 @@ test("former members can read earlier contributions but cannot edit or see recor
 			}),
 		/access/,
 	);
-	const later = await legacyRecord(db, "2026-11");
-	await db.patch(later.id, { _creationTime: leftAt + 1 });
-	const hidden = await invoke(contributions.list, db, {
-		privateId,
-		sharedId,
-		month: "2026-11",
-	});
-	assert.equal(hidden.contribution, null);
-	assert.equal(hidden.canEdit, false);
-	assert.deepEqual(hidden.suggestions, []);
 });
 
 test("contribution history still requires membership in both budgets", async () => {

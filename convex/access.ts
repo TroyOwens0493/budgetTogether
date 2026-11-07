@@ -9,7 +9,7 @@ export async function user(ctx: DbCtx) {
 	if (!current) throw new ConvexError("Sign in to continue.");
 	return current;
 }
-export async function access(ctx: DbCtx, spaceId: Id<"spaces">, write = false) {
+export async function access(ctx: DbCtx, spaceId: Id<"spaces">) {
 	const current = await user(ctx);
 	const space = await ctx.db.get(spaceId);
 	if (!space) throw new ConvexError("Budget not found.");
@@ -18,7 +18,7 @@ export async function access(ctx: DbCtx, spaceId: Id<"spaces">, write = false) {
 		.withIndex("by_user", (q) => q.eq("userId", current._id))
 		.filter((q) => q.eq(q.field("spaceId"), spaceId))
 		.first();
-	if (!membership || (write && !membership.active))
+	if (!membership?.active)
 		throw new ConvexError("You do not have access to this budget.");
 	return { current, space, membership };
 }
@@ -38,12 +38,4 @@ export function label(value: string, maximum = 100): string {
 	const error = labelError(value, maximum);
 	if (error) throw new ConvexError(error);
 	return result;
-}
-
-export async function readCutoff(
-	ctx: DbCtx,
-	spaceId: Id<"spaces">,
-): Promise<number> {
-	const { membership } = await access(ctx, spaceId);
-	return membership.active ? Infinity : (membership.leftAt ?? 0);
 }

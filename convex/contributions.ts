@@ -11,22 +11,16 @@ async function contributionAccess(
 	privateId: Id<"spaces">,
 	sharedId: Id<"spaces">,
 	m: string,
-	write = false,
 ) {
-	const { space, membership: personalMembership } = await access(
-		ctx,
-		privateId,
-		write,
-	);
-	const { space: shared, membership } = await access(ctx, sharedId, write);
+	const { space } = await access(ctx, privateId);
+	const { space: shared } = await access(ctx, sharedId);
 	month(m);
 	if (space.type !== "private" || shared.type !== "shared")
 		throw new ConvexError("Select a private and shared budget.");
 	const fundedByShared = Boolean(await sharedForPersonal(ctx, space, m));
 	return {
 		fundedByShared,
-		canEdit: personalMembership.active && membership.active && !fundedByShared,
-		cutoff: membership.active ? Infinity : (membership.leftAt ?? 0),
+		canEdit: !fundedByShared,
 	};
 }
 
@@ -37,36 +31,19 @@ export const list = query({
 		month: v.string(),
 	},
 	handler: async (ctx, args) => {
-		const { canEdit, cutoff } = await contributionAccess(
+		const { canEdit } = await contributionAccess(
 			ctx,
 			args.privateId,
 			args.sharedId,
 			args.month,
 		);
-		let contribution = await ctx.db
+		const contribution = await ctx.db
 			.query("contributions")
 			.withIndex("by_private", (q) =>
 				q.eq("privateId", args.privateId).eq("month", args.month),
 			)
 			.filter((q) => q.eq(q.field("sharedId"), args.sharedId))
 			.unique();
-		if (contribution && contribution._creationTime > cutoff)
-			contribution = null;
-		if (contribution && Number.isFinite(cutoff)) {
-			const pairs = [];
-			for (const pair of contribution.pairs) {
-				const outgoing = await ctx.db.get(pair.outId);
-				const incoming = await ctx.db.get(pair.inId);
-				if (
-					outgoing &&
-					incoming &&
-					outgoing._creationTime <= cutoff &&
-					incoming._creationTime <= cutoff
-				)
-					pairs.push(pair);
-			}
-			contribution = { ...contribution, pairs };
-		}
 		if (!canEdit) return { contribution, suggestions: [], canEdit };
 		const personal = await ctx.db
 			.query("transactions")
@@ -135,7 +112,6 @@ export const savePlanned = mutation({
 			args.privateId,
 			args.sharedId,
 			args.month,
-			true,
 		);
 		money(args.planned, true);
 		if (fundedByShared)
@@ -190,8 +166,8 @@ export const confirm = mutation({
 		inId: v.id("transactions"),
 	},
 	handler: async (ctx, args) => {
-		const { space } = await access(ctx, args.privateId, true);
-		const { space: shared } = await access(ctx, args.sharedId, true);
+		const { space } = await access(ctx, args.privateId);
+		const { space: shared } = await access(ctx, args.sharedId);
 		if (space.type !== "private" || shared.type !== "shared")
 			throw new ConvexError("Select a private and shared budget.");
 		const outgoing = await ctx.db.get(args.outId);
@@ -272,7 +248,6 @@ export const unmatch = mutation({
 			c.privateId,
 			c.sharedId,
 			c.month,
-			true,
 		);
 		if (fundedByShared)
 			throw new ConvexError(

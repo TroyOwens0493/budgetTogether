@@ -1,15 +1,15 @@
 import { ConvexError, v } from "convex/values";
 import { assertRevision, money, month } from "../src/domain/budget";
 import { mutation, query } from "./_generated/server";
-import { access, readCutoff } from "./access";
+import { access } from "./access";
 import { recipients } from "./model/personalFunding";
 
 export const list = query({
 	args: { sharedId: v.id("spaces"), month: v.string() },
 	handler: async (ctx, args) => {
-		const cutoff = await readCutoff(ctx, args.sharedId);
+		await access(ctx, args.sharedId);
 		month(args.month);
-		const people = await recipients(ctx, args.sharedId, args.month, cutoff);
+		const people = await recipients(ctx, args.sharedId, args.month);
 		const rows = await ctx.db
 			.query("personalAllocations")
 			.withIndex("by_shared", (q) =>
@@ -17,9 +17,7 @@ export const list = query({
 			)
 			.collect();
 		return people.map((person) => {
-			const row = rows.find(
-				(x) => x.privateId === person.privateId && x._creationTime <= cutoff,
-			);
+			const row = rows.find((x) => x.privateId === person.privateId);
 			return {
 				privateId: person.privateId,
 				name: person.name,
@@ -40,7 +38,7 @@ export const save = mutation({
 		revision: v.number(),
 	},
 	handler: async (ctx, args) => {
-		await access(ctx, args.sharedId, true);
+		await access(ctx, args.sharedId);
 		month(args.month);
 		money(args.amount, true);
 		const people = await recipients(ctx, args.sharedId, args.month);

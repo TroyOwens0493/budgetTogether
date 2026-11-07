@@ -14,25 +14,20 @@ import {
 } from "../../src/domain/funds";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { access, readCutoff } from "../access";
+import { access } from "../access";
 
 type MonthArgs = { spaceId: Id<"spaces">; month: string };
 
 /** The same calculation supplies the Funds tab, budget preview, and save check.
  * Future saved plans cannot fund an earlier month's goals. */
 export async function summary(ctx: QueryCtx | MutationCtx, args: MonthArgs) {
-	const cutoff = await readCutoff(ctx, args.spaceId);
+	await access(ctx, args.spaceId);
 	month(args.month);
 	const all = await ctx.db
 		.query("funds")
 		.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
 		.collect();
-	const funds = all.filter(
-		(row) =>
-			row._creationTime <= cutoff &&
-			row.startMonth <= args.month &&
-			row.schedules.some((s) => s.createdAt <= cutoff),
-	);
+	const funds = all.filter((row) => row.startMonth <= args.month);
 	if (!funds.length)
 		return {
 			items: [],
@@ -49,16 +44,14 @@ export async function summary(ctx: QueryCtx | MutationCtx, args: MonthArgs) {
 		)
 		.collect();
 	const visibleFunds = new Set(funds.map((row) => row._id));
-	const contributions: FundContribution[] = plans
-		.filter((row) => row._creationTime <= cutoff)
-		.flatMap((row) =>
-			(row.fundAllocations ?? [])
-				.filter((entry) => visibleFunds.has(entry.fundId))
-				.map((entry) => ({
-					...entry,
-					month: row.month,
-				})),
-		);
+	const contributions: FundContribution[] = plans.flatMap((row) =>
+		(row.fundAllocations ?? [])
+			.filter((entry) => visibleFunds.has(entry.fundId))
+			.map((entry) => ({
+				...entry,
+				month: row.month,
+			})),
+	);
 	const transactions = await ctx.db
 		.query("transactions")
 		.withIndex("by_space_funded_date", (q) =>
@@ -69,13 +62,7 @@ export async function summary(ctx: QueryCtx | MutationCtx, args: MonthArgs) {
 		)
 		.collect();
 	const payments: FundPayment[] = transactions
-		.filter(
-			(row) =>
-				!row.removed &&
-				!row.pending &&
-				row.kind === "purchase" &&
-				row._creationTime <= cutoff,
-		)
+		.filter((row) => !row.removed && !row.pending && row.kind === "purchase")
 		.flatMap((row) =>
 			row.splits.flatMap((split) =>
 				split.fundId
@@ -91,15 +78,7 @@ export async function summary(ctx: QueryCtx | MutationCtx, args: MonthArgs) {
 		);
 	const items = funds
 		.flatMap((fund) => {
-			const row = fundForMonth(
-				{
-					...fund,
-					schedules: fund.schedules.filter((s) => s.createdAt <= cutoff),
-				},
-				args.month,
-				contributions,
-				payments,
-			);
+			const row = fundForMonth(fund, args.month, contributions, payments);
 			return row ? [{ ...row, _id: fund._id }] : [];
 		})
 		.sort((a, b) => a.name.localeCompare(b.name));
@@ -153,7 +132,7 @@ export async function save(
 		revision: number;
 	},
 ) {
-	await access(ctx, args.spaceId, true);
+	await access(ctx, args.spaceId);
 	money(args.openingBalance, true);
 	const old = args.id ? await ctx.db.get(args.id) : null;
 	if (args.id && (!old || old.spaceId !== args.spaceId))
@@ -193,7 +172,12 @@ export async function save(
 		throw new ConvexError(
 			"A new fund must start in its first contribution month.",
 		);
-	const schedules = [...(old?.schedules ?? []), schedule];
+	const schedules = [
+		...(old?.schedules ?? []).filter(
+			(row) => row.effectiveMonth !== schedule.effectiveMonth,
+		),
+		schedule,
+	];
 	if (old) {
 		await ctx.db.patch(old._id, { schedules, revision: old.revision + 1 });
 		return old._id;

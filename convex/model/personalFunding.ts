@@ -27,13 +27,9 @@ export async function sharedForPersonal(
 	for (const membership of memberships) {
 		const shared = await ctx.db.get(membership.spaceId);
 		if (
+			!membership.active ||
 			shared?.type !== "shared" ||
 			month < calendarMonth(membership.joinedAt, shared.timeZone)
-		)
-			continue;
-		if (
-			!membership.active &&
-			month > calendarMonth(membership.leftAt ?? 0, shared.timeZone)
 		)
 			continue;
 		return shared._id;
@@ -46,7 +42,6 @@ export async function recipients(
 	ctx: DbCtx,
 	sharedId: Id<"spaces">,
 	month: string,
-	cutoff = Infinity,
 ) {
 	const shared = await ctx.db.get(sharedId);
 	if (shared?.type !== "shared") return [];
@@ -57,13 +52,8 @@ export async function recipients(
 	const result = [];
 	for (const membership of memberships) {
 		if (
-			membership._creationTime > cutoff ||
+			!membership.active ||
 			month < calendarMonth(membership.joinedAt, shared.timeZone)
-		)
-			continue;
-		if (
-			!membership.active &&
-			month > calendarMonth(membership.leftAt ?? 0, shared.timeZone)
 		)
 			continue;
 		const spaces = await ctx.db
@@ -85,10 +75,6 @@ export async function recipients(
 				privateId: personal._id,
 				name: profile?.name ?? "Partner",
 				active: membership.active,
-				cutoff: Math.min(
-					cutoff,
-					membership.active ? Infinity : (membership.leftAt ?? 0),
-				),
 			});
 			break;
 		}

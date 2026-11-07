@@ -109,7 +109,6 @@ function BudgetAppContent({ home }: { home: Home }) {
 						{home.spaces.map((s) => (
 							<option key={s._id} value={s._id}>
 								{s.name}
-								{s.active ? "" : " · previous membership"}
 							</option>
 						))}
 					</select>
@@ -180,12 +179,6 @@ function BudgetAppContent({ home }: { home: Home }) {
 						</span>
 					</div>
 				</header>
-				{!space.active && (
-					<p className="banner">
-						You left this budget. Records shared before you left are available
-						to read.
-					</p>
-				)}
 				{error && (
 					<ErrorBanner message={error} onDismiss={() => setError("")} />
 				)}

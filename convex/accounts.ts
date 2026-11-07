@@ -1,33 +1,20 @@
 import { ConvexError, v } from "convex/values";
 import { assertRevision } from "../src/domain/budget";
 import { mutation, query } from "./_generated/server";
-import { access, label, readCutoff, user } from "./access";
+import { access, label, user } from "./access";
 export const list = query({
 	args: { spaceId: v.id("spaces") },
 	handler: async (ctx, args) => {
-		const cutoff = await readCutoff(ctx, args.spaceId);
+		await access(ctx, args.spaceId);
 		const accounts = await ctx.db
 			.query("accounts")
 			.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
-			.filter((q) =>
-				q.lte(
-					q.field("_creationTime"),
-					Number.isFinite(cutoff) ? cutoff : Number.MAX_SAFE_INTEGER,
-				),
-			)
 			.collect();
 		// Include an account label for historical records without exposing its current private assignment.
 		const entries = await ctx.db
 			.query("transactions")
 			.withIndex("by_space_date", (q) => q.eq("spaceId", args.spaceId))
-			.filter((q) =>
-				q.lte(
-					q.field("_creationTime"),
-					Number.isFinite(cutoff) ? cutoff : Number.MAX_SAFE_INTEGER,
-				),
-			)
 			.collect();
-		if (Number.isFinite(cutoff)) accounts.splice(0, accounts.length);
 		const ids = new Set(accounts.map((x) => x._id));
 		for (const entry of entries)
 			if (!ids.has(entry.accountId)) {
@@ -43,8 +30,7 @@ export const list = query({
 			name: a.name,
 			type: a.type,
 			mask: a.mask,
-			active:
-				!Number.isFinite(cutoff) && a.active && a.spaceId === args.spaceId,
+			active: a.active && a.spaceId === args.spaceId,
 			revision: a.revision,
 			canMove: a.userId === current._id && a.spaceId === args.spaceId,
 		}));
@@ -72,7 +58,7 @@ export const rename = mutation({
 	handler: async (ctx, args) => {
 		const account = await ctx.db.get(args.id);
 		if (!account) throw new ConvexError("Account not found.");
-		await access(ctx, account.spaceId, true);
+		await access(ctx, account.spaceId);
 		assertRevision(account.revision, args.revision);
 		await ctx.db.patch(args.id, {
 			name: label(args.name),
@@ -92,8 +78,8 @@ export const move = mutation({
 		const account = await ctx.db.get(args.id);
 		if (!account || account.userId !== current._id)
 			throw new ConvexError("Only the connecting user can move this account.");
-		await access(ctx, account.spaceId, true);
-		const { space: destination } = await access(ctx, args.destinationId, true);
+		await access(ctx, account.spaceId);
+		const { space: destination } = await access(ctx, args.destinationId);
 		assertRevision(account.revision, args.revision);
 		if (account.spaceId === args.destinationId)
 			throw new ConvexError("This account is already in that budget.");

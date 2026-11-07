@@ -4,6 +4,8 @@ import * as accounts from "../convex/accounts.ts";
 import * as bank from "../convex/bank.ts";
 import * as budgets from "../convex/budgets.ts";
 import * as classification from "../convex/classification.ts";
+import * as contributions from "../convex/contributions.ts";
+import * as personalAllocations from "../convex/personalAllocations.ts";
 import * as sharing from "../convex/sharing.ts";
 import {
 	connectedAccount,
@@ -289,6 +291,48 @@ test("private budgets, outsiders and former members cannot delete a shared budge
 	);
 	await invoke(sharing.purge, db, { spaceId: sharedId });
 	assert.ok(await db.get(sharedId));
+});
+
+test("legacy inactive memberships grant no access to shared history", async () => {
+	const { db, sharedId, bobPrivateId, bobAccountId } = await household();
+	await entry(db, sharedId, bobAccountId, 500, "purchase");
+	const member = [...db.rows.values()].find(
+		(row) => row.spaceId === sharedId && row.userId === "bob",
+	);
+	assert.ok(member);
+	await db.patch(member._id, { active: false, leftAt: Date.now() });
+	db.current = "bob";
+	const home = await invoke(budgets.home, db, {});
+	assert.deepEqual(
+		home.spaces.map((space) => space._id),
+		[bobPrivateId],
+	);
+	const period = { spaceId: sharedId, month: "2026-09" };
+	const requests = [
+		() => invoke(budgets.dashboard, db, period),
+		() => invoke(budgets.categories, db, { spaceId: sharedId }),
+		() => invoke(budgets.transactions, db, period),
+		() => invoke(budgets.funds, db, period),
+		() =>
+			invoke(budgets.reports, db, {
+				spaceId: sharedId,
+				from: "2026-09",
+				to: "2026-09",
+			}),
+		() => invoke(budgets.recurring, db, { spaceId: sharedId }),
+		() => invoke(budgets.alerts, db, period),
+		() => invoke(accounts.list, db, { spaceId: sharedId }),
+		() => invoke(sharing.status, db, { spaceId: sharedId }),
+		() =>
+			invoke(personalAllocations.list, db, { sharedId, month: period.month }),
+		() =>
+			invoke(contributions.list, db, {
+				privateId: bobPrivateId,
+				sharedId,
+				month: period.month,
+			}),
+	];
+	for (const request of requests) await assert.rejects(request, /access/);
 });
 
 test("large histories delete in bounded retry-safe batches and block reads immediately", async () => {

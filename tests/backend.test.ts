@@ -1070,7 +1070,7 @@ test("shared planned income and personal allocations balance; allocation changes
 	});
 });
 
-test("income routing preserves months before joining and excludes private income imported after departure", async () => {
+test("income routing preserves months before joining and stops using inactive memberships", async () => {
 	const { db, privateId, sharedId, accountId } = await fundedHousehold();
 	await entry(
 		db,
@@ -1103,10 +1103,9 @@ test("income routing preserves months before joining and excludes private income
 	const membership = [...db.rows.values()].find(
 		(x) => x.spaceId === sharedId && x.userId === "alice",
 	)!;
-	const leftAt = Date.now();
-	await db.patch(membership._id, { active: false, leftAt });
-	const later = await entry(db, privateId, accountId, -30000, "income");
-	await db.patch(later, { _creationTime: leftAt + 1 });
+	await db.patch(membership._id, { active: false, leftAt: Date.now() });
+	await entry(db, privateId, accountId, -30000, "income");
+
 	db.current = "bob";
 	assert.equal(
 		(
@@ -1115,7 +1114,7 @@ test("income routing preserves months before joining and excludes private income
 				month: "2026-09",
 			})
 		).income,
-		20000,
+		0,
 	);
 	db.current = "alice";
 	assert.equal(
@@ -1125,7 +1124,7 @@ test("income routing preserves months before joining and excludes private income
 				month: "2026-09",
 			})
 		).income,
-		30000,
+		50000,
 	);
 });
 

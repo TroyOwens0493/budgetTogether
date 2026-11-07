@@ -8,7 +8,7 @@ import {
 } from "../../src/domain/budget";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { access, label, readCutoff } from "../access";
+import { access, label } from "../access";
 import { validatePayments } from "./funds";
 
 export async function list(
@@ -23,7 +23,7 @@ export async function list(
 		limit?: number;
 	},
 ) {
-	const cutoff = await readCutoff(ctx, args.spaceId);
+	await access(ctx, args.spaceId);
 	month(args.month);
 	const size = Math.max(1, Math.min(100, Math.floor(args.limit ?? 30)));
 	const result = await ctx.db
@@ -44,7 +44,6 @@ export async function list(
 	// Filter only this bounded index block. Sparse matches can produce empty pages.
 	const matches = result.page.filter(
 		(x) =>
-			x._creationTime <= cutoff &&
 			!x.removed &&
 			(!args.search ||
 				`${x.description} ${x.note}`
@@ -76,7 +75,7 @@ export async function save(
 		revision: number;
 	},
 ) {
-	await access(ctx, args.spaceId, true);
+	await access(ctx, args.spaceId);
 	const account = await ctx.db.get(args.accountId);
 	const old = args.id ? await ctx.db.get(args.id) : null;
 	if (
@@ -163,7 +162,7 @@ export async function remove(
 ) {
 	const entry = await ctx.db.get(args.id);
 	if (!entry) throw new ConvexError("Transaction not found.");
-	await access(ctx, entry.spaceId, true);
+	await access(ctx, entry.spaceId);
 	assertRevision(entry.revision, args.revision);
 	if (entry.source !== "manual")
 		throw new ConvexError("Only manual entries can be deleted.");
@@ -196,7 +195,7 @@ export async function reconcile(
 		throw new ConvexError(
 			"Choose an imported entry in the same account with the same amount.",
 		);
-	await access(ctx, manual.spaceId, true);
+	await access(ctx, manual.spaceId);
 	assertRevision(manual.revision, args.revision);
 	await validatePayments(ctx, manual.spaceId, imported.date, manual.splits);
 	if (

@@ -68,24 +68,19 @@ export const create = mutation({
 export const status = query({
 	args: { spaceId: v.id("spaces") },
 	handler: async (ctx, args) => {
-		const { membership } = await access(ctx, args.spaceId);
-		const cutoff = membership.active
-			? Number.MAX_SAFE_INTEGER
-			: (membership.leftAt ?? 0);
+		await access(ctx, args.spaceId);
 		const members = await ctx.db
 			.query("memberships")
 			.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
 			.collect();
 		const profiles = await Promise.all(
-			members
-				.filter((x) => x._creationTime <= cutoff)
-				.map(async (m) => {
-					const profile = await ctx.db
-						.query("profiles")
-						.withIndex("by_user", (q) => q.eq("userId", m.userId))
-						.unique();
-					return { name: profile?.name ?? "Member", active: m.active };
-				}),
+			members.map(async (m) => {
+				const profile = await ctx.db
+					.query("profiles")
+					.withIndex("by_user", (q) => q.eq("userId", m.userId))
+					.unique();
+				return { name: profile?.name ?? "Member", active: m.active };
+			}),
 		);
 		const invitations = await ctx.db
 			.query("invitations")
@@ -93,15 +88,13 @@ export const status = query({
 			.collect();
 		return {
 			members: profiles,
-			invitations: invitations
-				.filter((x) => x._creationTime <= cutoff)
-				.map((x) => ({
-					_id: x._id,
-					email: x.email,
-					status: x.status,
-					delivery: x.delivery,
-					expiresAt: x.expiresAt,
-				})),
+			invitations: invitations.map((x) => ({
+				_id: x._id,
+				email: x.email,
+				status: x.status,
+				delivery: x.delivery,
+				expiresAt: x.expiresAt,
+			})),
 		};
 	},
 });
@@ -121,7 +114,7 @@ export const invite = action({
 export const storeInvite = internalMutation({
 	args: { spaceId: v.id("spaces"), email: v.string(), tokenHash: v.string() },
 	handler: async (ctx, args) => {
-		const { current, space } = await access(ctx, args.spaceId, true);
+		const { current, space } = await access(ctx, args.spaceId);
 		if (space.type !== "shared")
 			throw new ConvexError("Invite a partner from a shared budget.");
 		const email = args.email.trim().toLowerCase();
@@ -206,7 +199,7 @@ export const revoke = mutation({
 	handler: async (ctx, args) => {
 		const invite = await ctx.db.get(args.id);
 		if (!invite) throw new ConvexError("Invitation not found.");
-		await access(ctx, invite.spaceId, true);
+		await access(ctx, invite.spaceId);
 		await ctx.db.patch(args.id, { status: "revoked" });
 	},
 });
@@ -270,7 +263,7 @@ export const acceptHash = internalMutation({
 export const leave = mutation({
 	args: { spaceId: v.id("spaces") },
 	handler: async (ctx, args) => {
-		const { space } = await access(ctx, args.spaceId, true);
+		const { space } = await access(ctx, args.spaceId);
 		if (space.type !== "shared")
 			throw new ConvexError("You can leave only a shared budget.");
 		await sharedDeletion.remove(ctx, space);

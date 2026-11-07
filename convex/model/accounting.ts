@@ -1,7 +1,7 @@
 import { nextMonth, totals } from "../../src/domain/budget";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { access, readCutoff } from "../access";
+import { access } from "../access";
 import { summary as fundSummary } from "./funds";
 import { recipients, sharedForPersonal } from "./personalFunding";
 
@@ -10,26 +10,14 @@ export async function funding(
 	spaceId: Id<"spaces">,
 	m: string,
 ) {
-	const cutoff = await readCutoff(ctx, spaceId);
+	await access(ctx, spaceId);
 	let outgoing = await ctx.db
 		.query("contributions")
 		.withIndex("by_private", (q) => q.eq("privateId", spaceId).eq("month", m))
-		.filter((q) =>
-			q.lte(
-				q.field("_creationTime"),
-				Number.isFinite(cutoff) ? cutoff : Number.MAX_SAFE_INTEGER,
-			),
-		)
 		.collect();
 	let incoming = await ctx.db
 		.query("contributions")
 		.withIndex("by_shared", (q) => q.eq("sharedId", spaceId).eq("month", m))
-		.filter((q) =>
-			q.lte(
-				q.field("_creationTime"),
-				Number.isFinite(cutoff) ? cutoff : Number.MAX_SAFE_INTEGER,
-			),
-		)
 		.collect();
 	async function historicalContributions(rows: Doc<"contributions">[]) {
 		const historical = [];
@@ -50,12 +38,6 @@ export async function funding(
 		.withIndex("by_destination", (q) =>
 			q.eq("spaceId", spaceId).eq("destinationMonth", m),
 		)
-		.filter((q) =>
-			q.lte(
-				q.field("_creationTime"),
-				Number.isFinite(cutoff) ? cutoff : Number.MAX_SAFE_INTEGER,
-			),
-		)
 		.collect();
 	async function actual(rows: Doc<"contributions">[]) {
 		let value = 0;
@@ -75,9 +57,7 @@ export async function funding(
 					out.amount === pair.amount &&
 					incoming.amount === -pair.amount &&
 					out.date.slice(0, 7) === m &&
-					incoming.date.slice(0, 7) === m &&
-					out._creationTime <= cutoff &&
-					incoming._creationTime <= cutoff
+					incoming.date.slice(0, 7) === m
 				)
 					value += pair.amount;
 			}
@@ -91,12 +71,8 @@ export async function funding(
 		.query("personalAllocations")
 		.withIndex("by_shared", (q) => q.eq("sharedId", spaceId).eq("month", m))
 		.collect();
-	const allocatedIn = personalIncoming
-		.filter((x) => x._creationTime <= cutoff)
-		.reduce((sum, x) => sum + x.amount, 0);
-	const allocatedOut = personalOutgoing
-		.filter((x) => x._creationTime <= cutoff)
-		.reduce((sum, x) => sum + x.amount, 0);
+	const allocatedIn = personalIncoming.reduce((sum, x) => sum + x.amount, 0);
+	const allocatedOut = personalOutgoing.reduce((sum, x) => sum + x.amount, 0);
 	return {
 		personalIncoming: allocatedIn,
 		personalOutgoing: allocatedOut,
@@ -114,7 +90,7 @@ export async function results(
 	spaceId: Id<"spaces">,
 	m: string,
 ) {
-	const cutoff = await readCutoff(ctx, spaceId);
+	const { space } = await access(ctx, spaceId);
 	const entries = await ctx.db
 		.query("transactions")
 		.withIndex("by_space_date", (q) =>
@@ -123,28 +99,14 @@ export async function results(
 				.gte("date", `${m}-01`)
 				.lt("date", `${nextMonth(m)}-01`),
 		)
-		.filter((q) =>
-			q.lte(
-				q.field("_creationTime"),
-				Number.isFinite(cutoff) ? cutoff : Number.MAX_SAFE_INTEGER,
-			),
-		)
 		.collect();
 	const funds = await funding(ctx, spaceId, m);
-	const { space } = await access(ctx, spaceId);
 	const fundedBy = await sharedForPersonal(ctx, space, m);
 	let counted = entries;
 	let householdIncome = 0;
-	if (fundedBy) {
-		const people = await recipients(ctx, fundedBy, m);
-		const personalCutoff =
-			people.find((x) => x.privateId === spaceId)?.cutoff ?? Infinity;
-		counted = entries.filter(
-			(x) => x.kind !== "income" || x._creationTime > personalCutoff,
-		);
-	}
+	if (fundedBy) counted = entries.filter((x) => x.kind !== "income");
 	if (space.type === "shared") {
-		for (const person of await recipients(ctx, spaceId, m, cutoff)) {
+		for (const person of await recipients(ctx, spaceId, m)) {
 			const privateEntries = await ctx.db
 				.query("transactions")
 				.withIndex("by_space_date", (q) =>
@@ -155,9 +117,7 @@ export async function results(
 				)
 				.collect();
 			householdIncome += totals(
-				privateEntries.filter(
-					(x) => x.kind === "income" && x._creationTime <= person.cutoff,
-				),
+				privateEntries.filter((x) => x.kind === "income"),
 			).income;
 		}
 	}

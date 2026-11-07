@@ -78,8 +78,7 @@ export function fundForMonth(
 	payments: FundPayment[],
 ) {
 	const selected = monthNumber(selectedMonth);
-	// Keep the last edit for each effective month. Earlier edits stay stored
-	// so a former partner's read cutoff can still select the old values.
+	// Use the last edit for each effective month, including legacy duplicates.
 	const byMonth = new Map<string, FundSchedule>();
 	for (const row of fund.schedules)
 		if (row.effectiveMonth <= selectedMonth)

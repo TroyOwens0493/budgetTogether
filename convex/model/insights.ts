@@ -6,14 +6,14 @@ import {
 } from "../../src/domain/budget";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { access, readCutoff } from "../access";
+import { access } from "../access";
 import { results } from "./accounting";
 
 export async function recurring(
 	ctx: QueryCtx,
 	args: { spaceId: Id<"spaces"> },
 ) {
-	const cutoff = await readCutoff(ctx, args.spaceId);
+	await access(ctx, args.spaceId);
 	const entries = await ctx.db
 		.query("transactions")
 		.withIndex("by_space_date", (q) => q.eq("spaceId", args.spaceId))
@@ -22,13 +22,11 @@ export async function recurring(
 		.query("recurring")
 		.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
 		.collect();
-	return detectRecurring(entries.filter((x) => x._creationTime <= cutoff)).map(
-		(x) => ({
-			...x,
-			status:
-				states.find((s) => s.merchant === x.merchant)?.status ?? "suggested",
-		}),
-	);
+	return detectRecurring(entries).map((x) => ({
+		...x,
+		status:
+			states.find((s) => s.merchant === x.merchant)?.status ?? "suggested",
+	}));
 }
 
 export async function setRecurring(
@@ -39,7 +37,7 @@ export async function setRecurring(
 		status: Doc<"recurring">["status"];
 	},
 ) {
-	await access(ctx, args.spaceId, true);
+	await access(ctx, args.spaceId);
 	const rows = await ctx.db
 		.query("recurring")
 		.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
@@ -54,19 +52,12 @@ export async function alerts(
 	args: { spaceId: Id<"spaces">; month: string },
 ) {
 	const { current } = await access(ctx, args.spaceId);
-	const cutoff = await readCutoff(ctx, args.spaceId);
 	month(args.month);
 	const result = await results(ctx, args.spaceId, args.month);
 	const plan = await ctx.db
 		.query("plans")
 		.withIndex("by_month", (q) =>
 			q.eq("spaceId", args.spaceId).eq("month", args.month),
-		)
-		.filter((q) =>
-			q.lte(
-				q.field("_creationTime"),
-				Number.isFinite(cutoff) ? cutoff : Number.MAX_SAFE_INTEGER,
-			),
 		)
 		.unique();
 	const reads = await ctx.db

@@ -39,7 +39,7 @@ function historicalPriceError(error: string | undefined) {
 }
 
 export async function list(ctx: QueryCtx, spaceId: Id<"spaces">) {
-	const { space } = await access(ctx, spaceId, true);
+	const { space } = await access(ctx, spaceId);
 	const startsOn = today(space.timeZone);
 	const month = startsOn.slice(0, 7);
 	const settings = await ctx.db
@@ -133,7 +133,7 @@ export async function saveSettings(
 		revision: number;
 	},
 ) {
-	const { space } = await access(ctx, args.spaceId, true);
+	const { space } = await access(ctx, args.spaceId);
 	forecastHorizon(args.currentAge, args.targetAge);
 	money(args.cashBalance, true);
 	annualReturn(args.cashAnnualReturn);
@@ -191,7 +191,7 @@ function checkFixed(value: typeof fixedIncome.type | undefined) {
 }
 
 export async function saveHolding(ctx: MutationCtx, args: HoldingInput) {
-	const { current, space } = await access(ctx, args.spaceId, true);
+	const { current, space } = await access(ctx, args.spaceId);
 	money(args.balance);
 	money(args.monthlyContribution, true);
 	if (args.annualReturnOverride !== undefined)
@@ -309,7 +309,7 @@ export async function removeHolding(
 	const holding = await ctx.db.get(id);
 	const account = holding ? await ctx.db.get(holding.accountId) : null;
 	if (!holding || !account) throw new ConvexError("Holding not found.");
-	await access(ctx, account.spaceId, true);
+	await access(ctx, account.spaceId);
 	if (account.connectionId)
 		throw new ConvexError(
 			"Exclude imported holdings instead of deleting them.",
@@ -330,7 +330,7 @@ export async function includeCash(
 		(!account.investment && !["checking", "savings"].includes(account.type))
 	)
 		throw new ConvexError("Forecast account not found.");
-	await access(ctx, account.spaceId, true);
+	await access(ctx, account.spaceId);
 	assertRevision(account.revision, revision);
 	await ctx.db.patch(id, {
 		projectionCashExcluded: excluded,

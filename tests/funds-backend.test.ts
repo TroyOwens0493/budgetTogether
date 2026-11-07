@@ -48,7 +48,7 @@ test("an overdrawn fund cannot release nonexistent reserves as available leftove
 	);
 });
 
-test("partners share fund edits while former members keep only the prior fund settings", async () => {
+test("partners share fund edits and former members cannot read or edit funds", async () => {
 	const { db } = await fixture();
 	const spaceId = await invoke(sharing.create, db, {});
 	const membership = await db.insert("memberships", {
@@ -70,34 +70,20 @@ test("partners share fund edits while former members keep only the prior fund se
 		(await invoke(budgets.funds, db, { spaceId, month })).items[0].name,
 		"Car insurance",
 	);
-	const fund = await db.get(fundId);
-	assert.ok(fund);
-	const settings = fund.schedules as { createdAt: number }[];
-	const cutoff = settings.at(-1)?.createdAt ?? 0;
-	await db.patch(membership, { active: false, leftAt: cutoff });
-	db.current = "alice";
-	await invoke(budgets.saveFund, db, {
-		...args,
-		id: fundId,
-		revision: 2,
-		name: "Updated after departure",
-		targetAmount: 90000,
-	});
-	// Separate the timestamps deterministically, even on a fast test runner.
-	const updated = await db.get(fundId);
-	assert.ok(updated);
-	const schedules = updated.schedules as { createdAt: number }[];
-	schedules[schedules.length - 1].createdAt = cutoff + 1;
-	await db.patch(fundId, { schedules });
-	db.current = "bob";
-	const history = await invoke(budgets.funds, db, { spaceId, month });
-	assert.equal(history.items[0].name, "Car insurance");
-	assert.equal(history.total, 20000);
+	const schedules = (await db.get(fundId))?.schedules;
+	assert.ok(Array.isArray(schedules));
+	assert.equal(schedules.length, 1);
+	await db.patch(membership, { active: false, leftAt: Date.now() });
 	await assert.rejects(
-		() => invoke(budgets.saveFund, db, { ...args, id: fundId, revision: 3 }),
+		() => invoke(budgets.funds, db, { spaceId, month }),
+		/access/,
+	);
+	await assert.rejects(
+		() => invoke(budgets.saveFund, db, { ...args, id: fundId, revision: 2 }),
 		/access/,
 	);
 });
+
 function fundArgs(spaceId: Id<"spaces">) {
 	return {
 		spaceId,

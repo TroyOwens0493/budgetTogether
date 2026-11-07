@@ -3,20 +3,13 @@ import { assertRevision } from "../../src/domain/budget";
 import { categoryNameError } from "../../src/domain/validation";
 import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
-import { access, label, readCutoff } from "../access";
+import { access, label } from "../access";
 
 export async function list(ctx: QueryCtx, args: { spaceId: Id<"spaces"> }) {
 	await access(ctx, args.spaceId);
-	const cutoff = await readCutoff(ctx, args.spaceId);
 	return ctx.db
 		.query("categories")
 		.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
-		.filter((q) =>
-			q.lte(
-				q.field("_creationTime"),
-				Number.isFinite(cutoff) ? cutoff : Number.MAX_SAFE_INTEGER,
-			),
-		)
 		.collect();
 }
 
@@ -30,7 +23,7 @@ export async function save(
 		revision?: number;
 	},
 ) {
-	await access(ctx, args.spaceId, true);
+	await access(ctx, args.spaceId);
 	const name = label(args.name);
 	if (!/^#[\da-f]{6}$/i.test(args.color))
 		throw new ConvexError("Choose a valid color.");
@@ -78,7 +71,7 @@ export async function remove(
 		args.id === args.replacementId
 	)
 		throw new ConvexError("Choose a different category in this budget.");
-	await access(ctx, category.spaceId, true);
+	await access(ctx, category.spaceId);
 	assertRevision(category.revision, args.revision);
 	const transactions = await ctx.db
 		.query("transactions")

@@ -26,7 +26,7 @@ export async function save(
 		fundSignature?: string;
 	},
 ) {
-	const { space } = await access(ctx, args.spaceId, true);
+	const { space } = await access(ctx, args.spaceId);
 	month(args.month);
 	if (
 		(await sharedForPersonal(ctx, space, args.month)) &&
@@ -109,7 +109,7 @@ export async function save(
 }
 
 export async function repeat(ctx: MutationCtx, args: MonthArgs) {
-	const { space } = await access(ctx, args.spaceId, true);
+	const { space } = await access(ctx, args.spaceId);
 	month(args.month);
 	const destination = nextMonth(args.month);
 	const old = await ctx.db
@@ -147,7 +147,7 @@ export async function review(
 		revision: number;
 	},
 ) {
-	const { space } = await access(ctx, args.spaceId, true);
+	const { space } = await access(ctx, args.spaceId);
 	month(args.month);
 	const plan = await ctx.db
 		.query("plans")
@@ -255,7 +255,7 @@ export async function review(
 }
 
 export async function ensure(ctx: MutationCtx, args: MonthArgs) {
-	const { space } = await access(ctx, args.spaceId, true);
+	const { space } = await access(ctx, args.spaceId);
 	month(args.month);
 	const existing = await ctx.db
 		.query("plans")

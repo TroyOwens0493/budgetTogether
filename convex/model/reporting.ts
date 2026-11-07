@@ -8,7 +8,7 @@ import {
 } from "../../src/domain/budget";
 import type { Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
-import { access, readCutoff } from "../access";
+import { access } from "../access";
 import { results } from "./accounting";
 import { sameAllocations } from "./funds";
 
@@ -16,7 +16,7 @@ export async function dashboard(
 	ctx: QueryCtx,
 	args: { spaceId: Id<"spaces">; month: string },
 ) {
-	const cutoff = await readCutoff(ctx, args.spaceId);
+	await access(ctx, args.spaceId);
 	month(args.month);
 	const result = await results(ctx, args.spaceId, args.month);
 	const plan = await ctx.db
@@ -24,33 +24,15 @@ export async function dashboard(
 		.withIndex("by_month", (q) =>
 			q.eq("spaceId", args.spaceId).eq("month", args.month),
 		)
-		.filter((q) =>
-			q.lte(
-				q.field("_creationTime"),
-				Number.isFinite(cutoff) ? cutoff : Number.MAX_SAFE_INTEGER,
-			),
-		)
 		.unique();
 	const categories = await ctx.db
 		.query("categories")
 		.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
-		.filter((q) =>
-			q.lte(
-				q.field("_creationTime"),
-				Number.isFinite(cutoff) ? cutoff : Number.MAX_SAFE_INTEGER,
-			),
-		)
 		.collect();
 	const reserved = await ctx.db
 		.query("carry")
 		.withIndex("by_source", (q) =>
 			q.eq("spaceId", args.spaceId).eq("sourceMonth", args.month),
-		)
-		.filter((q) =>
-			q.lte(
-				q.field("_creationTime"),
-				Number.isFinite(cutoff) ? cutoff : Number.MAX_SAFE_INTEGER,
-			),
 		)
 		.collect();
 	return {

@@ -15,15 +15,15 @@ import { removedValidator, SYNC_BATCH_SIZE, txValidator } from "./bankTypes";
 import { applyChanges, applyRemovals } from "./model/bankImport";
 import { updateCashBalances } from "./model/investmentImport";
 import {
-	decrypt,
 	accountBalance,
+	decrypt,
 	encrypt,
 	type PlaidAccount,
 	PlaidError,
 	type PlaidTransaction,
 	plaid,
-	selectAccount,
 	type SyncPage,
+	selectAccount,
 } from "./plaidClient";
 import { bankAccount as accountValidator } from "./schema";
 export const identity = internalQuery({
