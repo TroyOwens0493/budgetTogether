@@ -31,6 +31,13 @@ export function tickerSymbol(value: string) {
 	return ticker || undefined;
 }
 
+function historicalPriceError(error: string | undefined) {
+	if (!error) return error;
+	return /no (?:adjusted )?price history|no historical prices/i.test(error)
+		? "No historical prices found."
+		: "Historical return can't be calculated.";
+}
+
 export async function list(ctx: QueryCtx, spaceId: Id<"spaces">) {
 	const { space } = await access(ctx, spaceId, true);
 	const startsOn = today(space.timeZone);
@@ -86,7 +93,18 @@ export async function list(ctx: QueryCtx, spaceId: Id<"spaces">) {
 											.withIndex("by_ticker", (q) => q.eq("ticker", ticker))
 											.unique()
 									: null;
-								return { ...holding, history };
+								return {
+									...holding,
+									problem:
+										holding.problem ===
+										"This investment type is outside this forecast's scope."
+											? "This investment type is unsupported."
+											: holding.problem,
+									// Normalize saved errors too, so old provider details stay private.
+									history: history
+										? { ...history, error: historicalPriceError(history.error) }
+										: null,
+								};
 							}),
 					),
 				};

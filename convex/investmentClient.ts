@@ -79,7 +79,7 @@ export function normalizeHoldings(data: HoldingsResponse) {
 								: value < 0 || holding.quantity < 0
 									? "Short positions cannot be forecast."
 									: type === "unsupported"
-										? "This investment type is outside this forecast's scope."
+										? "This investment type is unsupported."
 										: undefined;
 					const fixed = security?.fixed_income;
 					return {

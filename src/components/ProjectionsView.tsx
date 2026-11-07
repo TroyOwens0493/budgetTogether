@@ -1,5 +1,5 @@
 import { useAction, useMutation, useQuery } from "convex/react";
-import { type ReactNode, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { openPlaid } from "../lib/plaid-link";
@@ -7,11 +7,9 @@ import { AccountReview } from "./AccountsView";
 import { ProjectionChart } from "./ProjectionChart";
 import { HoldingEditor, ProjectionSettingsEditor } from "./ProjectionEditors";
 import {
-	effectiveFixed,
 	type Holding,
-	holdingReturn,
+	holdingForecastErrors,
 	type InvestmentAccount,
-	investmentNames,
 	prepareProjection,
 } from "./projection-data";
 import { ConfirmModal, usd } from "./ui";
@@ -20,11 +18,9 @@ import type { Run, ViewProps } from "./view-types";
 function AccountForecastToggle({
 	account,
 	run,
-	children,
 }: {
 	account: InvestmentAccount;
 	run: Run;
-	children: ReactNode;
 }) {
 	const include = useMutation(api.projections.includeAccount);
 	const [pending, setPending] = useState<boolean | null>(null);
@@ -52,19 +48,14 @@ function AccountForecastToggle({
 				}}
 			/>
 			<span>
-				<strong>
-					{account.name}
-					{account.mask ? ` · ${account.mask}` : ""}
-				</strong>
-				{account.institution && <small>{account.institution}</small>}
-				<small aria-live="polite">
+				<strong>{account.name}</strong>
+				<small className="sr-only" aria-live="polite">
 					{saving
 						? "Saving forecast selection…"
 						: account.projectionCashExcluded
 							? "Excluded from forecast"
 							: "Included in forecast"}
 				</small>
-				{children}
 			</span>
 		</label>
 	);
@@ -162,16 +153,6 @@ export function ProjectionsView({
 					)}
 				</section>
 			)}
-			{forecast.warnings.length > 0 && (
-				<details className="panel projection-notes">
-					<summary>Data notes ({forecast.warnings.length})</summary>
-					<ul>
-						{forecast.warnings.map((warning) => (
-							<li key={warning}>{warning}</li>
-						))}
-					</ul>
-				</details>
-			)}
 			{final && data.settings && (
 				<>
 					<div className="summary-grid">
@@ -250,17 +231,7 @@ export function ProjectionsView({
 					.filter((a) => !a.investment)
 					.map((account) => (
 						<div key={account._id} className="account-row">
-							<AccountForecastToggle account={account} run={run}>
-								<small>
-									{account.balance === undefined
-										? "Balance unavailable"
-										: usd(account.balance)}{" "}
-									·{" "}
-									{account.balanceAsOf
-										? new Date(account.balanceAsOf).toLocaleString()
-										: "Not synced"}
-								</small>
-							</AccountForecastToggle>
+							<AccountForecastToggle account={account} run={run} />
 						</div>
 					))}
 				{!data.accounts.some((a) => !a.investment) && (
@@ -283,7 +254,7 @@ export function ProjectionsView({
 								try {
 									await run(
 										() => refresh({ spaceId }),
-										"Return lookup finished. Check each holding's source and any data notes.",
+										"Return lookup finished.",
 									);
 								} finally {
 									setRefreshing(false);
@@ -327,14 +298,7 @@ export function ProjectionsView({
 					.map((account) => (
 						<div className="projection-account" key={account._id}>
 							<div className="account-row">
-								<AccountForecastToggle account={account} run={run}>
-									<small>
-										{account.type} · {account.linked ? "Linked" : "Manual"}
-										{account.balanceAsOf
-											? ` · Imported ${new Date(account.balanceAsOf).toLocaleString()}`
-											: ""}
-									</small>
-								</AccountForecastToggle>
+								<AccountForecastToggle account={account} run={run} />
 								{!account.linked && (
 									<button
 										type="button"
@@ -349,45 +313,15 @@ export function ProjectionsView({
 								<div className="projection-holding" key={holding._id}>
 									<div>
 										<strong>{holding.name}</strong>
-										<small>
-											{investmentNames[holding.type]}
-											{holding.ticker ? ` · ${holding.ticker}` : ""} ·{" "}
-											{holding.balance === undefined
-												? "Value unavailable"
-												: usd(holding.balance)}
-											{holding.excluded || account.projectionCashExcluded
-												? " · Excluded"
-												: ""}
-										</small>
-										<small>
-											{holding.type === "bond"
-												? `Coupon ${effectiveFixed(holding).couponRate ?? "—"}% · Matures ${effectiveFixed(holding).maturityDate ?? "not set"}`
-												: `${holdingReturn(holding)?.toFixed(2) ?? "—"}% annual ${holding.type === "cd" ? "yield" : "return"} · ${holding.annualReturnOverride !== undefined ? "Your override" : holding.type === "cash" ? "Cash assumption" : holding.type === "cd" ? "CD terms" : "Historical"}`}
-										</small>
-										{holding.history?.rate !== undefined && (
-											<small>
-												{holding.history.source ?? "Alpha Vantage"} ·{" "}
-												{holding.history.startDate} to {holding.history.endDate}{" "}
-												· {holding.history.rate.toFixed(2)}% annualized
-												{holding.history.fetchedAt
-													? ` · Retrieved ${new Date(holding.history.fetchedAt).toLocaleDateString()}`
-													: ""}
-											</small>
-										)}
-										{holding.asOf && (
-											<small>Holding value as of {holding.asOf}</small>
-										)}
 										{holding.history?.error && (
 											<small className="over">{holding.history.error}</small>
 										)}
-										{holding.problem && (
-											<small className="over">{holding.problem}</small>
-										)}
-										{holding.monthlyContribution > 0 && (
-											<small>
-												{usd(holding.monthlyContribution)} per month
-											</small>
-										)}
+										{!account.projectionCashExcluded &&
+											holdingForecastErrors(holding).map((error) => (
+												<small className="over" key={error}>
+													{error}
+												</small>
+											))}
 									</div>
 									<div className="button-row">
 										<button
@@ -397,15 +331,6 @@ export function ProjectionsView({
 										>
 											Edit forecast
 										</button>
-										{!account.linked && (
-											<button
-												type="button"
-												className="text-button"
-												onClick={() => setDeleting(holding)}
-											>
-												Delete
-											</button>
-										)}
 									</div>
 								</div>
 							))}
@@ -425,30 +350,6 @@ export function ProjectionsView({
 					</p>
 				)}
 			</section>
-			<details className="panel projection-notes">
-				<summary>How this forecast works</summary>
-				<p>
-					The forecast starts on {data.startsOn}. It repeats the current month's
-					savings target, with contributions added at each month end. Stock and
-					fund returns compound monthly. Historical rates use adjusted monthly
-					prices and assume dividends are reinvested.
-				</p>
-				<p>
-					Bonds keep their current value until maturity. Scheduled coupons go to
-					cash, and the face value goes to cash at maturity. CDs compound at the
-					entered APY until maturity, then move to cash. Cash interest is
-					applied monthly; payments received during a month earn cash interest
-					from the following month. Enter a new holding for another bond or CD
-					purchase.
-				</p>
-				<p>
-					These are estimates. Prices, returns, and interest rates can change.
-					The calculation does not include taxes, withdrawals, inflation,
-					employer matches, contribution limits, early redemption, bond default
-					or calls, or accrued interest adjustments. Retirement accounts show
-					the value of their holdings before taxes.
-				</p>
-			</details>
 			{settingsOpen && (
 				<ProjectionSettingsEditor
 					data={data}
@@ -463,6 +364,15 @@ export function ProjectionsView({
 					spaceId={spaceId}
 					{...editor}
 					run={run}
+					onDelete={
+						editor.holding && !editor.account?.linked
+							? () => {
+									if (!editor.holding) return;
+									setDeleting(editor.holding);
+									setEditor(null);
+								}
+							: undefined
+					}
 					close={() => setEditor(null)}
 				/>
 			)}

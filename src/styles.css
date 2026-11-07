@@ -1187,12 +1187,8 @@ dialog::backdrop {
 	grid-column: 1 / -1;
 	grid-row: 2;
 }
-.funded-split-row .split-fund > span {
-	font-size: 12px;
-}
 .funded-split-row {
 	padding: 12px 0;
-	border-bottom: 1px solid var(--border);
 }
 @media (prefers-reduced-motion: reduce) {
 	* {

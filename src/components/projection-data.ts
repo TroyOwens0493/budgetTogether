@@ -34,6 +34,27 @@ export function holdingReturn(holding: Holding) {
 				: (holding.annualReturnOverride ?? holding.history?.rate);
 }
 
+export function holdingForecastErrors(holding: Holding): string[] {
+	if (holding.excluded) return [];
+	const errors: string[] = [];
+	if (holding.problem) errors.push(holding.problem);
+	if (holdingReturn(holding) === undefined)
+		errors.push(
+			holding.type === "cd"
+				? "enter the CD's annual yield."
+				: !holding.ticker
+					? "enter an annual return override. No trading symbol is available for historical returns."
+					: "enter an annual return or load historical returns.",
+		);
+	if (
+		holding.balance === undefined ||
+		holding.currency !== "USD" ||
+		holding.balance < 0
+	)
+		errors.push("a nonnegative USD value is required.");
+	return errors;
+}
+
 export function prepareProjection(data: ProjectionData) {
 	const errors: string[] = [];
 	const warnings: string[] = [];
@@ -88,22 +109,12 @@ export function prepareProjection(data: ProjectionData) {
 				continue;
 			}
 			allocated += holding.monthlyContribution;
-			if (holding.problem) errors.push(`${holding.name}: ${holding.problem}`);
+			errors.push(
+				...holdingForecastErrors(holding).map(
+					(error) => `${holding.name}: ${error}`,
+				),
+			);
 			const rate = holdingReturn(holding);
-			if (rate === undefined)
-				errors.push(
-					holding.type === "cd"
-						? `${holding.name}: enter the CD's annual yield.`
-						: !holding.ticker
-							? `${holding.name}: enter an annual return override. No trading symbol is available for historical returns.`
-							: `${holding.name}: enter an annual return or load historical returns.`,
-				);
-			if (
-				holding.balance === undefined ||
-				holding.currency !== "USD" ||
-				holding.balance < 0
-			)
-				errors.push(`${holding.name}: a nonnegative USD value is required.`);
 			if (holding.history?.error && holding.annualReturnOverride === undefined)
 				warnings.push(`${holding.name}: ${holding.history.error}`);
 			if (

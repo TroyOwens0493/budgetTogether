@@ -143,7 +143,11 @@ export function TransactionsView({
 										)}
 									</td>
 									<td>
-										<span className="tag">
+										<button
+											type="button"
+											className="transaction-button tag"
+											onClick={() => setEditing(x)}
+										>
 											{x.kind !== "purchase"
 												? x.kind
 												: x.splits.length > 1
@@ -151,7 +155,7 @@ export function TransactionsView({
 													: (categories.find(
 															(c) => c._id === x.splits[0]?.categoryId,
 														)?.name ?? "Uncategorized")}
-										</span>
+										</button>
 									</td>
 									<td>
 										{accounts?.find((a) => a._id === x.accountId)?.name ??
@@ -434,7 +438,6 @@ function TransactionEditor({
 										/>
 									</label>
 									<label className="split-fund">
-										<span>Pay from fund for split {i + 1}</span>
 										<select
 											value={s.fundId}
 											aria-label={`Pay from fund for split ${i + 1}`}
@@ -488,11 +491,6 @@ function TransactionEditor({
 							>
 								Add split
 							</button>
-							<p className="muted">
-								{splits.length === 1
-									? "A single category uses the full transaction amount."
-									: "Split amounts must total the transaction amount, including its sign."}
-							</p>
 							{splits.some((split) => split.fundId) && (
 								<p className="muted">
 									Fund payments reduce the fund’s reserved balance. Refunds add

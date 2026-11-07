@@ -12,7 +12,10 @@ import { today } from "../convex/model/projections.ts";
 import { encrypt, selectAccount } from "../convex/plaidClient.ts";
 import * as projections from "../convex/projections.ts";
 import * as sharing from "../convex/sharing.ts";
-import { prepareProjection } from "../src/components/projection-data.ts";
+import {
+	holdingForecastErrors,
+	prepareProjection,
+} from "../src/components/projection-data.ts";
 import { addMonths } from "../src/domain/projections.ts";
 import { fixture, id, invoke } from "./helpers/backend.ts";
 
@@ -144,6 +147,13 @@ test("a fund without a trading symbol requests an override and exclusion removes
 		"Public fund: enter an annual return override. No trading symbol is available for historical returns.",
 	]);
 	const holding = data.accounts.flatMap((account) => account.holdings)[0];
+	assert.deepEqual(holdingForecastErrors(holding), [
+		"enter an annual return override. No trading symbol is available for historical returns.",
+	]);
+	assert.deepEqual(
+		holdingForecastErrors({ ...holding, annualReturnOverride: 0 }),
+		[],
+	);
 	await invoke(projections.saveHolding, db, {
 		...input,
 		spaceId: privateId,
@@ -154,6 +164,12 @@ test("a fund without a trading symbol requests an override and exclusion removes
 		revision: holding.revision,
 	});
 	data = await invoke(projections.list, db, { spaceId: privateId });
+	assert.deepEqual(
+		holdingForecastErrors(
+			data.accounts.flatMap((account) => account.holdings)[0],
+		),
+		[],
+	);
 	assert.deepEqual(prepareProjection(data).errors, []);
 	assert.ok(prepareProjection(data).points.length > 0);
 });
@@ -496,7 +512,53 @@ test("normalization supports selected types and marks unsupported, missing, and 
 	);
 	assert.equal(data[0].holdings[3].fixedIncome?.faceValue, 200000);
 	assert.match(data[0].holdings[1].problem ?? "", /USD/);
+	assert.equal(
+		data[0].holdings[5].problem,
+		"This investment type is unsupported.",
+	);
 	assert.match(data[0].holdings[6].problem ?? "", /value/);
+});
+
+test("forecast errors hide provider details and simplify previously saved messages", async () => {
+	const { db, privateId } = await forecastFixture();
+	await invoke(projections.saveHolding, db, { ...input, spaceId: privateId });
+	const historyId = await db.insert("returnHistory", {
+		ticker: "VTI",
+		rate: 5,
+	});
+	const data = await invoke(projections.list, db, { spaceId: privateId });
+	const holding = data.accounts.flatMap((account) => account.holdings)[0];
+	await db.patch(holding._id, {
+		problem: "This investment type is outside this forecast's scope.",
+	});
+	for (const [error, expected] of [
+		[
+			"Tiingo has no price history for this symbol. Check its symbol or enter a return.",
+			"No historical prices found.",
+		],
+		[
+			"Tiingo has no adjusted price history for this symbol. Check its symbol or enter a return.",
+			"No historical prices found.",
+		],
+		["No historical prices are available.", "No historical prices found."],
+		[
+			"Tiingo's request limit was reached.",
+			"Historical return can't be calculated.",
+		],
+		[
+			"At least one year of historical prices is required.",
+			"Historical return can't be calculated.",
+		],
+		["private-provider-details", "Historical return can't be calculated."],
+		[undefined, undefined],
+	]) {
+		await db.patch(historyId, { error });
+		const result = await invoke(projections.list, db, { spaceId: privateId });
+		const entry = result.accounts.flatMap((account) => account.holdings)[0];
+		assert.equal(entry.history?.error, expected);
+		assert.equal(entry.history?.rate, 5);
+		assert.equal(entry.problem, "This investment type is unsupported.");
+	}
 });
 
 test("Tiingo requests adjusted monthly prices with header authentication and share-class symbols", async (context) => {

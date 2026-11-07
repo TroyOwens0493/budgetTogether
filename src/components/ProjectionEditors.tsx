@@ -189,6 +189,7 @@ export function HoldingEditor({
 	account,
 	run,
 	close,
+	onDelete,
 }: {
 	data: ProjectionData;
 	spaceId: Id<"spaces">;
@@ -196,6 +197,7 @@ export function HoldingEditor({
 	account?: InvestmentAccount;
 	run: Run;
 	close: () => void;
+	onDelete?: () => void;
 }) {
 	const inputId = useId();
 	const mutation = useMutation(api.projections.saveHolding);
@@ -479,6 +481,16 @@ export function HoldingEditor({
 				<button type="submit" disabled={pending}>
 					{pending ? "Saving…" : "Save investment"}
 				</button>
+				{onDelete && (
+					<button
+						type="button"
+						className="text-button"
+						disabled={pending}
+						onClick={onDelete}
+					>
+						Delete investment
+					</button>
+				)}
 			</form>
 		</Modal>
 	);
