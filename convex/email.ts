@@ -1,18 +1,9 @@
 import { v } from "convex/values";
 import { internalAction } from "./_generated/server";
-export function escapeHtml(value: string): string {
-	return value.replace(
-		/[&<>"']/g,
-		(character) =>
-			({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-				character
-			]!,
-	);
-}
+import { type EmailContent, passwordResetEmail } from "./emailTemplates";
 export async function sendEmail(
 	to: string,
-	subject: string,
-	text: string,
+	content: EmailContent,
 	key: string,
 ): Promise<void> {
 	if (!process.env.RESEND_API_KEY || !process.env.RESEND_FROM)
@@ -27,8 +18,7 @@ export async function sendEmail(
 		body: JSON.stringify({
 			from: process.env.RESEND_FROM,
 			to: [to],
-			subject,
-			text,
+			...content,
 		}),
 	});
 	if (!response.ok)
@@ -39,10 +29,5 @@ export async function sendEmail(
 export const reset = internalAction({
 	args: { to: v.string(), url: v.string(), key: v.string() },
 	handler: async (_ctx, args) =>
-		sendEmail(
-			args.to,
-			"Reset your Budget Together password",
-			`Open this link to reset your password:\n${args.url}\nIf you did not request this, ignore this email.`,
-			args.key,
-		),
+		sendEmail(args.to, passwordResetEmail(args.url), args.key),
 });

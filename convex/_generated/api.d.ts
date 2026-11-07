@@ -19,6 +19,7 @@ import type * as classification from "../classification.js";
 import type * as contributions from "../contributions.js";
 import type * as crons from "../crons.js";
 import type * as email from "../email.js";
+import type * as emailTemplates from "../emailTemplates.js";
 import type * as http from "../http.js";
 import type * as investmentClient from "../investmentClient.js";
 import type * as investments from "../investments.js";
@@ -62,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   contributions: typeof contributions;
   crons: typeof crons;
   email: typeof email;
+  emailTemplates: typeof emailTemplates;
   http: typeof http;
   investmentClient: typeof investmentClient;
   investments: typeof investments;

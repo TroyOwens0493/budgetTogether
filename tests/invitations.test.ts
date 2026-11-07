@@ -333,6 +333,11 @@ test("Resend receives the correct invitation link and records accepted email sub
 				/https:\/\/budget.example.test\/\?invite=first-link/,
 			);
 			assert.match(body.text, /7 days/);
+			assert.match(body.html, /Review invitation<\/a>/);
+			assert.match(
+				body.html,
+				/href="https:\/\/budget.example.test\/\?invite=first-link"/,
+			);
 			assert.match(body.text, /bob@example.com/);
 			assert.ok(
 				String(

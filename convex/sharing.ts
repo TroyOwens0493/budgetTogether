@@ -11,6 +11,7 @@ import {
 } from "./_generated/server";
 import { access } from "./access";
 import { sendEmail } from "./email";
+import { invitationEmail } from "./emailTemplates";
 import * as invitations from "./model/invitations";
 import * as sharedDeletion from "./model/sharedDeletion";
 import { hash } from "./plaidClient";
@@ -158,8 +159,11 @@ export const send = internalAction({
 			url.searchParams.set("invite", args.token);
 			await sendEmail(
 				delivery.email,
-				`${delivery.inviterName} invited you to Budget Together`,
-				`${delivery.inviterName} invited you to create a shared budget on Budget Together.\n\nOpen this link, then sign in or create an account with ${delivery.email}:\n${url.href}\n\nReview and accept the invitation to create your shared budget. Your private budgets stay separate, and you choose which accounts to move.\n\nThis invitation expires in 7 days. If you did not expect it, you can ignore this email.`,
+				invitationEmail({
+					inviterName: delivery.inviterName,
+					email: delivery.email,
+					url: url.href,
+				}),
 				`invite-${args.id}-${tokenHash}`,
 			);
 			status = "sent";
