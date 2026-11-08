@@ -62,6 +62,14 @@ export const savePlan = mutation({
 		limits: v.array(split),
 		revision: v.number(),
 		fundSignature: v.optional(v.string()),
+		personalFunding: v.optional(
+			v.object({
+				signature: v.string(),
+				changes: v.array(
+					v.object({ privateId: v.id("spaces"), amount: v.number() }),
+				),
+			}),
+		),
 	},
 	handler: plansModel.save,
 });

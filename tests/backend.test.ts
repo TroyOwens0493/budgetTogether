@@ -6,6 +6,7 @@ import * as budgets from "../convex/budgets.ts";
 import * as contributions from "../convex/contributions.ts";
 import * as personalAllocations from "../convex/personalAllocations.ts";
 import * as sharing from "../convex/sharing.ts";
+import { fundingSignature } from "../src/domain/personal-funding-draft.ts";
 import {
 	connectedAccount,
 	entry,
@@ -1335,4 +1336,79 @@ test("automatic funding includes fund goals, subtracts carry and makes changed s
 			}),
 		/Funding changed/,
 	);
+});
+
+test("shared budget saves commit personal funding atomically and reject stale or invalid edits", async () => {
+	const { db, privateId, sharedId, categoryId } = await fundedHousehold();
+	await invoke(budgets.savePlan, db, {
+		spaceId: privateId,
+		month: "2026-09",
+		expectedIncome: 0,
+		savingsTarget: 0,
+		limits: [{ categoryId, amount: 10000 }],
+		revision: 0,
+	});
+	const before = await invoke(budgets.dashboard, db, {
+		spaceId: sharedId,
+		month: "2026-09",
+	});
+	const args = {
+		spaceId: sharedId,
+		month: "2026-09",
+		expectedIncome: 100000,
+		savingsTarget: 80000,
+		limits: [],
+		revision: 0,
+		personalFunding: {
+			signature: fundingSignature(before.personalFunding),
+			changes: [{ privateId, amount: 20000 }],
+		},
+	};
+	const originalRows = new Map(db.rows);
+	await assert.rejects(
+		() => invoke(budgets.savePlan, db, { ...args, savingsTarget: 90000 }),
+		/must balance/,
+	);
+	assert.deepEqual(
+		db.rows,
+		originalRows,
+		"failed plan saves must roll back funding and personal plan changes",
+	);
+	await assert.rejects(
+		() =>
+			invoke(budgets.savePlan, db, {
+				...args,
+				personalFunding: {
+					...args.personalFunding,
+					changes: [{ privateId: sharedId, amount: 20000 }],
+				},
+			}),
+		/active member/,
+	);
+	assert.deepEqual(db.rows, originalRows);
+	await invoke(budgets.savePlan, db, args);
+	const shared = await invoke(budgets.dashboard, db, {
+		spaceId: sharedId,
+		month: "2026-09",
+	});
+	assert.equal(shared.plan?.saved, true);
+	assert.equal(shared.plan?.revision, 1);
+	assert.equal(shared.funds.outgoing, 20000);
+	assert.equal(
+		shared.personalFunding.find((person) => person.privateId !== privateId)
+			?.automatic,
+		true,
+	);
+	const personal = await invoke(budgets.dashboard, db, {
+		spaceId: privateId,
+		month: "2026-09",
+	});
+	assert.equal(personal.plan?.saved, false);
+	assert.equal(personal.funds.incoming, 20000);
+	const committedRows = new Map(db.rows);
+	await assert.rejects(
+		() => invoke(budgets.savePlan, db, { ...args, revision: 1 }),
+		/Personal funding changed/,
+	);
+	assert.deepEqual(db.rows, committedRows);
 });

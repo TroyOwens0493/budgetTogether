@@ -1,5 +1,12 @@
-import { nextMonth, personalFundingRequired } from "../../src/domain/budget";
+import { ConvexError } from "convex/values";
+import {
+	money,
+	nextMonth,
+	personalFundingRequired,
+} from "../../src/domain/budget";
+import { fundingSignature } from "../../src/domain/personal-funding-draft";
 import type { Doc, Id } from "../_generated/dataModel";
+import type { MutationCtx } from "../_generated/server";
 import type { DbCtx } from "../access";
 import { internalSummary } from "./funds";
 
@@ -136,4 +143,67 @@ export async function allocations(
 			};
 		}),
 	);
+}
+
+/** Runs inside the budget mutation, so amounts and the balanced plan commit together. */
+export async function saveWithPlan(
+	ctx: MutationCtx,
+	sharedId: Id<"spaces">,
+	month: string,
+	draft: {
+		signature: string;
+		changes: { privateId: Id<"spaces">; amount: number }[];
+	},
+) {
+	const people = await allocations(ctx, sharedId, month);
+	if (fundingSignature(people) !== draft.signature)
+		throw new ConvexError(
+			"Personal funding changed. Load the current plan before saving.",
+		);
+	const seen = new Set<string>();
+	for (const change of draft.changes) {
+		money(change.amount, true);
+		const person = people.find(
+			(x) => x.privateId === change.privateId && x.active,
+		);
+		if (!person || seen.has(change.privateId))
+			throw new ConvexError(
+				"Choose each active member's personal budget once.",
+			);
+		seen.add(change.privateId);
+		if (change.amount === person.amount) continue;
+		const old = await ctx.db
+			.query("personalAllocations")
+			.withIndex("by_private", (q) =>
+				q.eq("privateId", change.privateId).eq("month", month),
+			)
+			.filter((q) => q.eq(q.field("sharedId"), sharedId))
+			.unique();
+		if (old)
+			await ctx.db.patch(old._id, {
+				amount: change.amount,
+				revision: old.revision + 1,
+			});
+		else
+			await ctx.db.insert("personalAllocations", {
+				sharedId,
+				privateId: change.privateId,
+				month,
+				amount: change.amount,
+				revision: 1,
+			});
+		const plan = await ctx.db
+			.query("plans")
+			.withIndex("by_month", (q) =>
+				q.eq("spaceId", change.privateId).eq("month", month),
+			)
+			.unique();
+		if (plan)
+			await ctx.db.patch(plan._id, {
+				saved: false,
+				status: undefined,
+				reviewed: false,
+				revision: plan.revision + 1,
+			});
+	}
 }

@@ -264,43 +264,58 @@ function allocationForm(page: Page, name = "Alice") {
 }
 
 async function saveAmount(page: Page, amount: string) {
-	const form = allocationForm(page);
-	await form
-		.getByLabel("Alice's personal amount", { exact: true })
-		.fill(amount);
-	await form.getByLabel("Alice's personal amount", { exact: true }).blur();
-	await expect(
-		page.getByText("Personal funding saved.", { exact: true }),
-	).toBeVisible();
+	const input = page.getByLabel("Alice's personal amount", { exact: true });
+	const previous = Number(await input.inputValue());
+	const income = page.getByLabel("Expected take-home income", { exact: true });
+	await income.fill(
+		(Number(await income.inputValue()) + Number(amount) - previous).toFixed(2),
+	);
+	await input.fill(amount);
+	await saveBudget(page);
 }
 
-test("personal funding saves on blur and Enter and survives a reload", async ({
-	household: { alice },
+test("personal funding is part of the budget form and only saves with the budget", async ({
+	household: { alice, bob },
 }) => {
 	await openMonthly(alice);
+	await openMonthly(bob);
 	const input = alice.getByLabel("Alice's personal amount", { exact: true });
+	await alice.getByLabel("Groceries", { exact: true }).fill("100.00");
 	await expect(
-		allocationForm(alice).getByRole("button", { name: "Save amount" }),
-	).toHaveCount(0);
-	await saveAmount(alice, "125.50");
+		allocationForm(alice).getByRole("button", {
+			name: "Save budget",
+			exact: true,
+		}),
+	).toBeVisible();
+	await expect(alice.getByRole("button", { name: "Save amount" })).toHaveCount(
+		0,
+	);
+	await input.fill("125.50");
+	await input.blur();
+	await expect(
+		bob.getByLabel("Alice's personal amount", { exact: true }),
+	).toHaveValue("0.00");
+	await expect(
+		alice.getByRole("button", { name: "Save budget", exact: true }),
+	).toBeDisabled();
+	await alice
+		.getByLabel("Expected take-home income", { exact: true })
+		.fill("225.50");
+	await saveBudget(alice);
 	await openMonthly(alice);
 	await expect(input).toHaveValue("125.50");
-	await input.fill("150.00");
-	await input.press("Enter");
 	await expect(
-		alice.getByText("Personal funding saved.", { exact: true }),
-	).toBeVisible();
-	await openMonthly(alice);
-	await expect(input).toHaveValue("150.00");
+		alice.getByLabel("Expected take-home income", { exact: true }),
+	).toHaveValue("225.50");
 });
 
-test("failed personal funding autosaves retain the amount and can be retried", async ({
+test("failed budget saves retain personal funding edits for a retry", async ({
 	household: { alice },
 }) => {
 	await openMonthly(alice);
 	let writes = 0;
 	await alice.route("**/__fixture/invoke", async (route) => {
-		if (route.request().postDataJSON()?.name === "personalAllocations:save") {
+		if (route.request().postDataJSON()?.name === "budgets:savePlan") {
 			writes++;
 			if (writes === 1) {
 				await route.fulfill({
@@ -313,20 +328,17 @@ test("failed personal funding autosaves retain the amount and can be retried", a
 		await route.continue();
 	});
 	const input = alice.getByLabel("Alice's personal amount", { exact: true });
-	await input.focus();
-	await input.blur();
+	await alice.getByLabel("Groceries", { exact: true }).fill("100.00");
 	await input.fill("125.50");
-	await input.blur();
-	const retry = allocationForm(alice).getByRole("button", {
-		name: "Retry save",
-	});
-	await expect(retry).toBeVisible();
-	await expect(input).toHaveValue("125.50");
-	expect(writes).toBe(1);
-	await retry.click();
+	await alice
+		.getByLabel("Expected take-home income", { exact: true })
+		.fill("225.50");
+	await alice.getByRole("button", { name: "Save budget", exact: true }).click();
 	await expect(
-		alice.getByText("Personal funding saved.", { exact: true }),
+		alice.getByText("Save unavailable.", { exact: true }),
 	).toBeVisible();
+	await expect(input).toHaveValue("125.50");
+	await saveBudget(alice);
 	expect(writes).toBe(2);
 	await openMonthly(alice);
 	await expect(input).toHaveValue("125.50");
@@ -472,7 +484,7 @@ test("invalid plan and funding amounts cannot save the last valid total", async 
 	await expect(personal).toHaveValue("0.00");
 });
 
-test("personal funding changes both budgets and requires each budget to be saved again", async ({
+test("personal funding saves with the shared budget and requires the personal budget to be saved again", async ({
 	household: { alice },
 }) => {
 	await openMonthly(alice);
@@ -488,16 +500,17 @@ test("personal funding changes both budgets and requires each budget to be saved
 	await alice
 		.getByRole("combobox", { name: "Budget space" })
 		.selectOption({ label: "Shared" });
-	await saveAmount(alice, "125.50");
-	await expect(
-		alice.getByRole("button", { name: "Load current plan" }),
-	).toBeVisible();
-	await alice.getByRole("button", { name: "Load current plan" }).click();
+	await alice
+		.getByLabel("Alice's personal amount", { exact: true })
+		.fill("125.50");
 	await expect(
 		alice.getByRole("button", { name: "Save budget", exact: true }),
 	).toBeDisabled();
 	await alice.getByLabel("Groceries", { exact: true }).fill("874.50");
 	await saveBudget(alice);
+	await expect(
+		alice.getByRole("button", { name: "Load current plan" }),
+	).toHaveCount(0);
 
 	await alice
 		.getByRole("combobox", { name: "Budget space" })
@@ -591,7 +604,7 @@ test("two members must load changed personal funding before saving their own amo
 		.fill("75.00");
 	await saveAmount(alice, "125.50");
 	await expect(
-		bob.getByRole("alert").filter({ hasText: "Alice's funding changed" }),
+		bob.getByRole("alert").filter({ hasText: "This plan changed" }),
 	).toBeVisible();
 	await expect(
 		allocationForm(bob).getByLabel("Alice's personal amount", { exact: true }),
@@ -604,15 +617,15 @@ test("two members must load changed personal funding before saving their own amo
 			exact: true,
 		}),
 	).toHaveValue("125.50");
-	await bob.getByRole("button", { name: "Load current amount" }).click();
+	await bob.getByRole("button", { name: "Load current plan" }).click();
 	await expect(
 		allocationForm(bob).getByLabel("Alice's personal amount", { exact: true }),
 	).toHaveValue("125.50");
 	await saveAmount(bob, "150.00");
 	await expect(
-		alice.getByRole("button", { name: "Load current amount" }),
+		alice.getByRole("button", { name: "Load current plan" }),
 	).toBeVisible();
-	await alice.getByRole("button", { name: "Load current amount" }).click();
+	await alice.getByRole("button", { name: "Load current plan" }).click();
 	await expect(
 		allocationForm(alice).getByLabel("Alice's personal amount", {
 			exact: true,

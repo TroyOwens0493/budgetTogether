@@ -13,7 +13,7 @@ import type { MutationCtx } from "../_generated/server";
 import { access } from "../access";
 import { funding, results } from "./accounting";
 import { summary as fundSummary, sameAllocations } from "./funds";
-import { sharedForPersonal } from "./personalFunding";
+import { saveWithPlan, sharedForPersonal } from "./personalFunding";
 import { planState } from "./reporting";
 
 type MonthArgs = { spaceId: Id<"spaces">; month: string };
@@ -26,6 +26,10 @@ export async function save(
 		limits: Doc<"plans">["limits"];
 		revision: number;
 		fundSignature?: string;
+		personalFunding?: {
+			signature: string;
+			changes: { privateId: Id<"spaces">; amount: number }[];
+		};
 	},
 ) {
 	const { space } = await access(ctx, args.spaceId);
@@ -52,6 +56,11 @@ export async function save(
 		const category = await ctx.db.get(limit.categoryId);
 		if (category?.spaceId !== args.spaceId)
 			throw new ConvexError("Every category must belong to this budget.");
+	}
+	if (args.personalFunding) {
+		if (space.type !== "shared")
+			throw new ConvexError("Personal funding belongs to the shared budget.");
+		await saveWithPlan(ctx, args.spaceId, args.month, args.personalFunding);
 	}
 	const funds = await funding(ctx, args.spaceId, args.month);
 	const fundPlan = await fundSummary(ctx, args);

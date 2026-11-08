@@ -2,6 +2,10 @@ import { useMutation } from "convex/react";
 import { type FormEvent, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { nextMonth } from "../domain/budget";
+import {
+	evaluatePersonalFunding,
+	fundingSignature,
+} from "../domain/personal-funding-draft";
 import { createPlanDraft, evaluatePlanDraft } from "../domain/plan-draft";
 import { amountError } from "../domain/validation";
 import { PersonalAllocationsView } from "./PersonalAllocationsView";
@@ -26,16 +30,40 @@ export function PlanView({
 		createPlanDraft(data.plan, data.categories),
 	);
 	const [saving, setSaving] = useState(false);
+	const [fundingSnapshot, setFundingSnapshot] = useState(data.personalFunding);
+	const [fundingAmounts, setFundingAmounts] = useState<Record<string, string>>(
+		{},
+	);
+	const personalFunding = evaluatePersonalFunding(
+		fundingSnapshot,
+		fundingAmounts,
+	);
+	const fundingStale =
+		fundingSignature(fundingSnapshot) !==
+		fundingSignature(data.personalFunding);
+	const outgoing = personalFunding
+		? data.funds.outgoing -
+			data.personalFunding.reduce((sum, x) => sum + x.amount, 0) +
+			personalFunding.total
+		: data.funds.outgoing;
 	const result = evaluatePlanDraft(draft, data.categories, {
 		fundedByShared: Boolean(data.fundedBy),
-		funds: data.funds,
+		funds: { ...data.funds, outgoing },
 		revision: data.plan?.revision ?? 0,
 		fundAmount: data.fundPlan.total,
 	});
 	async function submit(e: FormEvent<HTMLFormElement>) {
 		e.preventDefault();
 		const plan = result.plan;
-		if (!active || saving || !result.canSave || !plan) return;
+		if (
+			!active ||
+			saving ||
+			!result.canSave ||
+			fundingStale ||
+			!personalFunding ||
+			!plan
+		)
+			return;
 		setSaving(true);
 		try {
 			const saved = await run(
@@ -46,26 +74,51 @@ export function PlanView({
 						...plan,
 						revision: draft.revision,
 						fundSignature: data.fundPlan.signature,
+						personalFunding: shared
+							? {
+									signature: fundingSignature(fundingSnapshot),
+									changes: personalFunding.changes,
+								}
+							: undefined,
 					}),
 				"Budget saved.",
 			);
-			if (saved)
+			if (saved) {
 				setDraft((current) => ({ ...current, revision: draft.revision + 1 }));
+				setFundingSnapshot(
+					fundingSnapshot.map((person) => {
+						const change = personalFunding.changes.find(
+							(x) => x.privateId === person.privateId,
+						);
+						return change
+							? {
+									...person,
+									amount: change.amount,
+									revision: person.revision + 1,
+									automatic: false,
+								}
+							: person;
+					}),
+				);
+				setFundingAmounts({});
+			}
 		} finally {
 			setSaving(false);
 		}
 	}
 	return (
 		<>
-			{result.stale && (
+			{(result.stale || fundingStale) && (
 				<div className="banner" role="alert">
 					This plan changed. Your unsaved entries are still here.{" "}
 					<button
 						type="button"
 						className="secondary"
-						onClick={() =>
-							setDraft(createPlanDraft(data.plan, data.categories))
-						}
+						onClick={() => {
+							setDraft(createPlanDraft(data.plan, data.categories));
+							setFundingSnapshot(data.personalFunding);
+							setFundingAmounts({});
+						}}
 					>
 						Load current plan
 					</button>
@@ -148,6 +201,15 @@ export function PlanView({
 									))}
 							</div>
 						)}
+						{shared && (
+							<PersonalAllocationsView
+								people={fundingSnapshot}
+								amounts={fundingAmounts}
+								onChange={(id, value) =>
+									setFundingAmounts((current) => ({ ...current, [id]: value }))
+								}
+							/>
+						)}
 						<label htmlFor="budgetapp-target" className="allocation-row">
 							<span>Monthly savings target</span>
 							<ValidatedInput
@@ -188,7 +250,7 @@ export function PlanView({
 						</div>
 						<div>
 							<dt>Outgoing budget funding</dt>
-							<dd>{usd(data.funds.outgoing)}</dd>
+							<dd>{personalFunding ? usd(outgoing) : "Check amounts"}</dd>
 						</div>
 						<div>
 							<dt>Spending limits</dt>
@@ -210,24 +272,27 @@ export function PlanView({
 						</div>
 					</dl>
 					<p>
-						{result.error ||
+						{(!personalFunding &&
+							"Check personal funding amounts before saving.") ||
+							result.error ||
 							(result.balance === 0
 								? "✓ Every dollar has a place."
 								: "Adjust your plan until this amount is zero.")}
 					</p>
-					<button type="submit" disabled={!active || saving || !result.canSave}>
+					<button
+						type="submit"
+						disabled={
+							!active ||
+							saving ||
+							!result.canSave ||
+							fundingStale ||
+							!personalFunding
+						}
+					>
 						{saving ? "Saving…" : "Save budget"}
 					</button>
 				</aside>
 			</form>
-			{shared && (
-				<PersonalAllocationsView
-					sharedId={spaceId}
-					month={month}
-					active={active}
-					run={run}
-				/>
-			)}
 			<div className="button-row">
 				{data.plan && (
 					<button

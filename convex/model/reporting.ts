@@ -11,12 +11,13 @@ import type { QueryCtx } from "../_generated/server";
 import { access } from "../access";
 import { type funding, results } from "./accounting";
 import { type summary as fundSummary, sameAllocations } from "./funds";
+import { allocations } from "./personalFunding";
 
 export async function dashboard(
 	ctx: QueryCtx,
 	args: { spaceId: Id<"spaces">; month: string },
 ) {
-	await access(ctx, args.spaceId);
+	const { space } = await access(ctx, args.spaceId);
 	month(args.month);
 	const result = await results(ctx, args.spaceId, args.month);
 	const plan = await ctx.db
@@ -38,6 +39,10 @@ export async function dashboard(
 	const state = planState(plan, result.fundedBy, result.funds, result.fundPlan);
 	return {
 		...result,
+		personalFunding:
+			space.type === "shared"
+				? await allocations(ctx, args.spaceId, args.month)
+				: [],
 		balance: state.balance,
 		plan: state.plan,
 		categories: categories.sort((a, b) => a.order - b.order),

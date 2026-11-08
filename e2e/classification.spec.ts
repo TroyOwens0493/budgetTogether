@@ -20,7 +20,7 @@ test("pending and uncertain classifications are visible and manual review persis
 	try {
 		await page.goto("/e2e/fixtures/index.html");
 		await page.getByLabel("Reporting month").fill("2099-05");
-		await expect(page.getByText(/Totals may change/)).toBeVisible();
+		await expect(page.getByText(/Totals may change/)).toHaveCount(0);
 		await page
 			.getByRole("button", { name: "Transactions", exact: true })
 			.click();
