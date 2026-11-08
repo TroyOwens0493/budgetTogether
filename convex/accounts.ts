@@ -1,5 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { assertRevision } from "../src/domain/budget";
+import type { Doc, Id } from "./_generated/dataModel";
+import type { MutationCtx } from "./_generated/server";
 import { mutation, query } from "./_generated/server";
 import { access, label, user } from "./access";
 export const list = query({
@@ -79,28 +81,68 @@ export const move = mutation({
 		if (!account || account.userId !== current._id)
 			throw new ConvexError("Only the connecting user can move this account.");
 		await access(ctx, account.spaceId);
-		const { space: destination } = await access(ctx, args.destinationId);
+		await access(ctx, args.destinationId);
 		assertRevision(account.revision, args.revision);
 		if (account.spaceId === args.destinationId)
 			throw new ConvexError("This account is already in that budget.");
-		const parts = new Intl.DateTimeFormat("en-CA", {
-			timeZone: destination.timeZone,
-			year: "numeric",
-			month: "2-digit",
-			day: "2-digit",
-		}).formatToParts(new Date());
-		const date = `${parts.find((x) => x.type === "year")!.value}-${parts.find((x) => x.type === "month")!.value}-${parts.find((x) => x.type === "day")!.value}`;
-		const assignments = account.assignments ?? [
-			{ spaceId: account.spaceId, startsOn: "0000-01-01" },
-		];
 		await ctx.db.patch(account._id, {
-			spaceId: args.destinationId,
-			assignments: [
-				...assignments,
-				{ spaceId: args.destinationId, startsOn: date },
-			],
+			...(await assignmentChange(ctx, account, args.destinationId)),
 			revision: account.revision + 1,
 		});
 		// Existing transaction assignments stay unchanged, including all private history.
+	},
+});
+
+// Build the assignment patch before writing so a combined save is atomic.
+async function assignmentChange(
+	ctx: MutationCtx,
+	account: Doc<"accounts">,
+	destinationId: Id<"spaces">,
+) {
+	const { space: destination } = await access(ctx, destinationId);
+	const parts = new Intl.DateTimeFormat("en-CA", {
+		timeZone: destination.timeZone,
+		year: "numeric",
+		month: "2-digit",
+		day: "2-digit",
+	}).formatToParts(new Date());
+	const date = `${parts.find((x) => x.type === "year")!.value}-${parts.find((x) => x.type === "month")!.value}-${parts.find((x) => x.type === "day")!.value}`;
+	const assignments = account.assignments ?? [
+		{ spaceId: account.spaceId, startsOn: "0000-01-01" },
+	];
+	return {
+		spaceId: destinationId,
+		assignments: [...assignments, { spaceId: destinationId, startsOn: date }],
+	};
+}
+
+export const saveOptions = mutation({
+	args: {
+		id: v.id("accounts"),
+		name: v.string(),
+		destinationId: v.optional(v.id("spaces")),
+		revision: v.number(),
+	},
+	handler: async (ctx, args) => {
+		const account = await ctx.db.get(args.id);
+		if (!account) throw new ConvexError("Account not found.");
+		await access(ctx, account.spaceId);
+		assertRevision(account.revision, args.revision);
+		const name = label(args.name);
+		let assignment: Partial<Pick<Doc<"accounts">, "spaceId" | "assignments">> =
+			{};
+		if (args.destinationId && args.destinationId !== account.spaceId) {
+			const current = await user(ctx);
+			if (account.userId !== current._id)
+				throw new ConvexError(
+					"Only the connecting user can move this account.",
+				);
+			assignment = await assignmentChange(ctx, account, args.destinationId);
+		}
+		await ctx.db.patch(account._id, {
+			...assignment,
+			name,
+			revision: account.revision + 1,
+		});
 	},
 });
