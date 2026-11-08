@@ -51,9 +51,6 @@ export function SharingInvites({ email, run }: { email: string; run: Run }) {
 								? "Invitation email sent."
 								: "Invitation email queued."}
 					</p>
-					<p className="muted">
-						Resending replaces the old link and restarts the seven-day period.
-					</p>
 					<div className="button-row">
 						<button
 							type="button"
