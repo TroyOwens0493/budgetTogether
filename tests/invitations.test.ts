@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import test, { type TestContext } from "node:test";
 import * as budgets from "../convex/budgets.ts";
+import { today } from "../convex/model/projections.ts";
+import * as personalAllocations from "../convex/personalAllocations.ts";
 import { hash } from "../convex/plaidClient.ts";
 import * as sharing from "../convex/sharing.ts";
 import {
@@ -389,4 +391,61 @@ test("self-invites and missing email configuration do not create invitations", a
 	assert.equal(await invoke(sharing.outgoing, db, {}), null);
 	assert.equal(db.scheduled.length, 0);
 	assert.equal(shared(db).length, 0);
+});
+
+test("accepting an invitation immediately funds both existing personal budgets", async () => {
+	const { db, privateId, categoryId } = await fixture();
+	const month = today("America/Boise").slice(0, 7);
+	await invoke(budgets.savePlan, db, {
+		spaceId: privateId,
+		month,
+		expectedIncome: 100000,
+		savingsTarget: 30000,
+		limits: [{ categoryId, amount: 70000 }],
+		revision: 0,
+	});
+	await queue(db);
+	await bobSetup(db);
+	const bobId = (await invoke(budgets.home, db, {})).spaces[0]._id;
+	await invoke(budgets.savePlan, db, {
+		spaceId: bobId,
+		month,
+		expectedIncome: 20000,
+		savingsTarget: 20000,
+		limits: [],
+		revision: 0,
+	});
+	const sharedId = await invoke(sharing.accept, db, { token: "first-link" });
+	const people = await invoke(personalAllocations.list, db, {
+		sharedId,
+		month,
+	});
+	assert.equal(people.find((p) => p.privateId === privateId)?.amount, 100000);
+	assert.equal(people.find((p) => p.privateId === bobId)?.amount, 20000);
+	assert.equal(
+		(await invoke(budgets.dashboard, db, { spaceId: sharedId, month })).funds
+			.outgoing,
+		120000,
+	);
+	// The same money is included once on each side, without a bank transfer.
+	assert.equal(
+		(await invoke(budgets.dashboard, db, { spaceId: bobId, month })).funds
+			.incoming,
+		20000,
+	);
+	db.current = "alice";
+	assert.equal(
+		(await invoke(budgets.dashboard, db, { spaceId: privateId, month }))
+			.balance,
+		0,
+	);
+	assert.equal(
+		(
+			await invoke(budgets.dashboard, db, {
+				spaceId: privateId,
+				month: "2020-01",
+			})
+		).funds.incoming,
+		0,
+	);
 });

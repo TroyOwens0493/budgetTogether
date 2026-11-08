@@ -1,4 +1,10 @@
-import { cents, money, type Plan, planBalance } from "./budget";
+import {
+	cents,
+	money,
+	type Plan,
+	personalFundingRequired,
+	planBalance,
+} from "./budget";
 
 export type PlanDraft = {
 	expectedIncome: string;
@@ -46,7 +52,12 @@ export function evaluatePlanDraft<CategoryId extends string>(
 	categories: readonly { _id: CategoryId }[],
 	context: {
 		fundedByShared: boolean;
-		funds: { incoming: number; outgoing: number; carry: number };
+		funds: {
+			incoming: number;
+			outgoing: number;
+			carry: number;
+			automaticPersonalFunding?: boolean;
+		};
 		revision: number;
 		fundAmount?: number;
 	},
@@ -63,12 +74,26 @@ export function evaluatePlanDraft<CategoryId extends string>(
 	const total = limits.every((limit) => limit.amount !== null)
 		? checkedAmount(limits.reduce((sum, limit) => sum + (limit.amount ?? 0), 0))
 		: null;
+	let incoming: number | null = context.funds.incoming;
+	if (
+		context.funds.automaticPersonalFunding &&
+		savingsTarget !== null &&
+		total !== null
+	) {
+		try {
+			incoming = personalFundingRequired(
+				{ savingsTarget, limits: [{ categoryId: "total", amount: total }] },
+				context.fundAmount ?? 0,
+				context.funds.carry,
+			);
+		} catch {
+			incoming = null;
+		}
+	}
 	const available =
-		expectedIncome === null
+		expectedIncome === null || incoming === null
 			? null
-			: checkedAmount(
-					expectedIncome + context.funds.incoming + context.funds.carry,
-				);
+			: checkedAmount(expectedIncome + incoming + context.funds.carry);
 	let plan: {
 		expectedIncome: number;
 		savingsTarget: number;
@@ -80,7 +105,8 @@ export function evaluatePlanDraft<CategoryId extends string>(
 		expectedIncome !== null &&
 		savingsTarget !== null &&
 		total !== null &&
-		available !== null
+		available !== null &&
+		incoming !== null
 	) {
 		const parsed = {
 			expectedIncome,
@@ -93,7 +119,7 @@ export function evaluatePlanDraft<CategoryId extends string>(
 		try {
 			balance = planBalance(
 				parsed,
-				context.funds.incoming,
+				incoming,
 				context.funds.outgoing,
 				context.funds.carry,
 				context.fundAmount ?? 0,
@@ -107,6 +133,7 @@ export function evaluatePlanDraft<CategoryId extends string>(
 	const stale = context.revision > draft.revision;
 	return {
 		plan,
+		incoming,
 		expectedIncome,
 		savingsTarget,
 		total,

@@ -245,3 +245,32 @@ test("unsafe totals and invalid funding never enable a save", () => {
 		}
 	}
 });
+
+test("automatic personal funding balances new limits and savings in the save preview", () => {
+	const draft = createPlanDraft(plan, categories);
+	draft.limits.food = "30.00";
+	draft.savingsTarget = "25.00";
+	const automaticContext = {
+		...context,
+		fundedByShared: true,
+		funds: {
+			incoming: 0,
+			outgoing: 0,
+			carry: 1000,
+			automaticPersonalFunding: true,
+		},
+		fundAmount: 500,
+	};
+	const result = evaluatePlanDraft(draft, categories, automaticContext);
+	assert.equal(result.incoming, 12000);
+	assert.equal(result.available, 13000);
+	assert.equal(result.balance, 0);
+	assert.equal(result.canSave, true);
+	for (const fundAmount of [NaN, Infinity, Number.MAX_SAFE_INTEGER]) {
+		assert.equal(
+			evaluatePlanDraft(draft, categories, { ...automaticContext, fundAmount })
+				.canSave,
+			false,
+		);
+	}
+});

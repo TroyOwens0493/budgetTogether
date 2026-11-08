@@ -78,7 +78,9 @@ export function PlanView({
 						{data.fundedBy ? (
 							<p>
 								Income is planned in the shared budget. Your personal allocation
-								is {usd(data.funds.personalIncoming)} for this month.
+								is {draftMoney(result.incoming)} for this month.
+								{data.funds.automaticPersonalFunding &&
+									" Funding updates automatically when you save this plan."}
 							</p>
 						) : (
 							<label htmlFor="budgetapp-expected">
@@ -178,7 +180,7 @@ export function PlanView({
 						</div>
 						<div>
 							<dt>Incoming budget funding</dt>
-							<dd>{usd(data.funds.incoming)}</dd>
+							<dd>{draftMoney(result.incoming)}</dd>
 						</div>
 						<div>
 							<dt>Carry-forward</dt>

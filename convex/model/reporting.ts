@@ -6,11 +6,11 @@ import {
 	nextMonth,
 	planBalance,
 } from "../../src/domain/budget";
-import type { Id } from "../_generated/dataModel";
+import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { access } from "../access";
-import { results } from "./accounting";
-import { sameAllocations } from "./funds";
+import { type funding, results } from "./accounting";
+import { type summary as fundSummary, sameAllocations } from "./funds";
 
 export async function dashboard(
 	ctx: QueryCtx,
@@ -35,21 +35,11 @@ export async function dashboard(
 			q.eq("spaceId", args.spaceId).eq("sourceMonth", args.month),
 		)
 		.collect();
+	const state = planState(plan, result.fundedBy, result.funds, result.fundPlan);
 	return {
 		...result,
-		plan: plan
-			? {
-					...plan,
-					expectedIncome: result.fundedBy ? 0 : plan.expectedIncome,
-					saved:
-						isPlanSaved(plan) &&
-						sameAllocations(
-							plan.fundAllocations,
-							result.fundPlan.allocations,
-						) &&
-						(!result.fundedBy || plan.expectedIncome === 0),
-				}
-			: null,
+		balance: state.balance,
+		plan: state.plan,
 		categories: categories.sort((a, b) => a.order - b.order),
 		reserved,
 		available: leftovers(
@@ -57,18 +47,6 @@ export async function dashboard(
 			plan?.savingsTarget ?? 0,
 			reserved.reduce((s, x) => s + x.amount, 0),
 		),
-		balance: plan
-			? planBalance(
-					{
-						...plan,
-						expectedIncome: result.fundedBy ? 0 : plan.expectedIncome,
-					},
-					result.funds.incoming,
-					result.funds.outgoing,
-					result.funds.carry,
-					result.fundPlan.total,
-				)
-			: null,
 	};
 }
 
@@ -92,4 +70,39 @@ export async function list(
 		});
 	}
 	return rows;
+}
+
+/** Dashboard and forecasts use the same current funding and saved-plan checks. */
+export function planState(
+	plan: Doc<"plans"> | null,
+	fundedBy: Id<"spaces"> | null,
+	funds: Awaited<ReturnType<typeof funding>>,
+	fundPlan: Awaited<ReturnType<typeof fundSummary>>,
+) {
+	const balance = plan
+		? planBalance(
+				{
+					...plan,
+					expectedIncome: fundedBy ? 0 : plan.expectedIncome,
+				},
+				funds.incoming,
+				funds.outgoing,
+				funds.carry,
+				fundPlan.total,
+			)
+		: null;
+	return {
+		balance,
+		plan: plan
+			? {
+					...plan,
+					expectedIncome: fundedBy ? 0 : plan.expectedIncome,
+					saved:
+						isPlanSaved(plan) &&
+						balance === 0 &&
+						sameAllocations(plan.fundAllocations, fundPlan.allocations) &&
+						(!fundedBy || plan.expectedIncome === 0),
+				}
+			: null,
+	};
 }

@@ -931,7 +931,14 @@ test("both partners can edit allocations without private access; outsiders and s
 	});
 	assert.deepEqual(
 		rows.find((x) => x.privateId === privateId),
-		{ privateId, name: "Alice", active: true, amount: 12300, revision: 1 },
+		{
+			privateId,
+			name: "Alice",
+			active: true,
+			amount: 12300,
+			revision: 1,
+			automatic: false,
+		},
 	);
 	assert.equal(rows.find((x) => x.privateId === bobId)!.amount, 0);
 	await assert.rejects(
@@ -1174,5 +1181,158 @@ test("bank transfers and legacy contributions do not add funding to the new allo
 				inId: id<"transactions">(inId),
 			}),
 		/budget allocation/,
+	);
+});
+
+test("joining funds both personal plans automatically and keeps their details private", async () => {
+	const { db, privateId, sharedId, bobId, categoryId } =
+		await fundedHousehold();
+	// Plans made before joining also supply next month's automatic limits.
+	await db.insert("plans", {
+		spaceId: privateId,
+		month: "2026-08",
+		expectedIncome: 200000,
+		savingsTarget: 30000,
+		limits: [{ categoryId, amount: 70000 }],
+		saved: true,
+		revision: 1,
+	});
+	await db.insert("plans", {
+		spaceId: bobId,
+		month: "2026-09",
+		expectedIncome: 90000,
+		savingsTarget: 10000,
+		limits: [],
+		saved: true,
+		revision: 1,
+	});
+	let shared = await invoke(budgets.dashboard, db, {
+		spaceId: sharedId,
+		month: "2026-09",
+	});
+	assert.equal(shared.funds.outgoing, 110000);
+	const people = await invoke(personalAllocations.list, db, {
+		sharedId,
+		month: "2026-09",
+	});
+	assert.equal(people.find((p) => p.privateId === privateId)?.amount, 100000);
+	assert.ok(people.every((p) => p.automatic));
+	assert.ok(people.every((p) => !("limits" in p) && !("savingsTarget" in p)));
+	await invoke(budgets.ensureMonth, db, {
+		spaceId: privateId,
+		month: "2026-09",
+	});
+	const personal = await invoke(budgets.dashboard, db, {
+		spaceId: privateId,
+		month: "2026-09",
+	});
+	assert.equal(personal.funds.incoming, 100000);
+	assert.equal(personal.balance, 0);
+	await invoke(budgets.savePlan, db, {
+		spaceId: privateId,
+		month: "2026-09",
+		expectedIncome: 0,
+		savingsTarget: 40000,
+		limits: [{ categoryId, amount: 70000 }],
+		revision: 1,
+	});
+	shared = await invoke(budgets.dashboard, db, {
+		spaceId: sharedId,
+		month: "2026-09",
+	});
+	assert.equal(shared.funds.outgoing, 120000);
+	db.current = "bob";
+	await assert.rejects(
+		() =>
+			invoke(budgets.dashboard, db, { spaceId: privateId, month: "2026-09" }),
+		/access/,
+	);
+});
+
+test("automatic funding includes fund goals, subtracts carry and makes changed shared plans require saving", async () => {
+	const { db, privateId, sharedId, categoryId } = await fundedHousehold();
+	await db.insert("carry", {
+		spaceId: privateId,
+		sourceMonth: "2026-08",
+		destinationMonth: "2026-09",
+		amount: 10000,
+	});
+	await invoke(budgets.saveFund, db, {
+		spaceId: privateId,
+		name: "Emergency",
+		startMonth: "2026-09",
+		openingBalance: 0,
+		targetAmount: 50000,
+		monthlyAmount: 5000,
+		effectiveMonth: "2026-09",
+		revision: 0,
+	});
+	const data = await invoke(budgets.dashboard, db, {
+		spaceId: privateId,
+		month: "2026-09",
+	});
+	await db.insert("plans", {
+		spaceId: privateId,
+		month: "2026-09",
+		expectedIncome: 0,
+		savingsTarget: 30000,
+		limits: [{ categoryId, amount: 70000 }],
+		saved: false,
+		revision: 1,
+	});
+	assert.equal(
+		(
+			await invoke(budgets.dashboard, db, {
+				spaceId: privateId,
+				month: "2026-09",
+			})
+		).funds.incoming,
+		95000,
+	);
+	assert.equal(data.fundPlan.total, 5000);
+	await invoke(budgets.savePlan, db, {
+		spaceId: sharedId,
+		month: "2026-09",
+		expectedIncome: 200000,
+		savingsTarget: 105000,
+		limits: [],
+		revision: 0,
+	});
+	assert.equal(
+		(
+			await invoke(budgets.dashboard, db, {
+				spaceId: sharedId,
+				month: "2026-09",
+			})
+		).plan?.saved,
+		true,
+	);
+	// A new goal changes the automatic amount without exposing the goal to the partner.
+	await invoke(budgets.saveFund, db, {
+		spaceId: privateId,
+		name: "Car",
+		startMonth: "2026-09",
+		openingBalance: 0,
+		targetAmount: 20000,
+		monthlyAmount: 2000,
+		effectiveMonth: "2026-09",
+		revision: 0,
+	});
+	const shared = await invoke(budgets.dashboard, db, {
+		spaceId: sharedId,
+		month: "2026-09",
+	});
+	assert.equal(shared.funds.outgoing, 97000);
+	assert.equal(shared.plan?.saved, false);
+	assert.equal(shared.balance, -2000);
+	await assert.rejects(
+		() =>
+			invoke(budgets.review, db, {
+				spaceId: sharedId,
+				month: "2026-09",
+				allocations: [],
+				revision: 1,
+			}),
+		/Funding changed/,
 	);
 });

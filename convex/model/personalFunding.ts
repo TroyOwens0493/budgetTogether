@@ -1,5 +1,7 @@
+import { nextMonth, personalFundingRequired } from "../../src/domain/budget";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { DbCtx } from "../access";
+import { internalSummary } from "./funds";
 
 function calendarMonth(time: number, timeZone: string) {
 	const parts = new Intl.DateTimeFormat("en", {
@@ -80,4 +82,58 @@ export async function recipients(
 		}
 	}
 	return result;
+}
+
+/** Expose only each total to the household; private plan details stay internal. */
+export async function allocations(
+	ctx: DbCtx,
+	sharedId: Id<"spaces">,
+	month: string,
+) {
+	const people = await recipients(ctx, sharedId, month);
+	const rows = await ctx.db
+		.query("personalAllocations")
+		.withIndex("by_shared", (q) =>
+			q.eq("sharedId", sharedId).eq("month", month),
+		)
+		.collect();
+	return Promise.all(
+		people.map(async (person) => {
+			const row = rows.find((x) => x.privateId === person.privateId);
+			if (row)
+				return {
+					...person,
+					amount: row.amount,
+					revision: row.revision,
+					automatic: false,
+				};
+			const plan = await ctx.db
+				.query("plans")
+				.withIndex("by_month", (q) =>
+					q.eq("spaceId", person.privateId).lt("month", nextMonth(month)),
+				)
+				.order("desc")
+				.first();
+			const carry = await ctx.db
+				.query("carry")
+				.withIndex("by_destination", (q) =>
+					q.eq("spaceId", person.privateId).eq("destinationMonth", month),
+				)
+				.collect();
+			const funds = await internalSummary(ctx, {
+				spaceId: person.privateId,
+				month,
+			});
+			return {
+				...person,
+				amount: personalFundingRequired(
+					plan,
+					funds.total,
+					carry.reduce((sum, x) => sum + x.amount, 0),
+				),
+				revision: 0,
+				automatic: true,
+			};
+		}),
+	);
 }

@@ -5,6 +5,7 @@ import {
 	money,
 	month,
 	nextMonth,
+	personalFundingRequired,
 	planBalance,
 } from "../../src/domain/budget";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -13,6 +14,7 @@ import { access } from "../access";
 import { funding, results } from "./accounting";
 import { summary as fundSummary, sameAllocations } from "./funds";
 import { sharedForPersonal } from "./personalFunding";
+import { planState } from "./reporting";
 
 type MonthArgs = { spaceId: Id<"spaces">; month: string };
 
@@ -82,6 +84,8 @@ export async function save(
 				`Carry-forward from ${source} is invalid. Check that month’s transactions and savings target.`,
 			);
 	}
+	if (funds.automaticPersonalFunding)
+		funds.incoming = personalFundingRequired(args, fundPlan.total, funds.carry);
 	const balance = planBalance(
 		args,
 		funds.incoming,
@@ -169,6 +173,12 @@ export async function review(
 	if (!sameAllocations(plan.fundAllocations, result.fundPlan.allocations))
 		throw new ConvexError(
 			"Fund amounts changed. Save this month's budget before completing its review.",
+		);
+	if (
+		!planState(plan, result.fundedBy, result.funds, result.fundPlan).plan?.saved
+	)
+		throw new ConvexError(
+			"Funding changed. Balance and save this month's budget before completing its review.",
 		);
 	const amount = args.allocations.reduce(
 		(s, x) => s + money(x.amount, true),

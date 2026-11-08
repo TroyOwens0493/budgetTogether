@@ -1041,3 +1041,29 @@ test("failed historical lookups can retry after repair without bypassing the coo
 		null,
 	);
 });
+
+test("draft and unbalanced saved plans cannot supply forecast funding", async () => {
+	const { db, privateId } = await forecastFixture();
+	const plan = [...db.rows.values()].find(
+		(row) => row._id.startsWith("plans:") && row.spaceId === privateId,
+	);
+	assert.ok(plan);
+	await db.patch(plan._id, { saved: false });
+	let data = await invoke(projections.list, db, { spaceId: privateId });
+	assert.equal(data.savedPlan, false);
+	assert.equal(data.savingsTarget, 0);
+	assert.equal(prepareProjection(data).points.length, 0);
+	await db.patch(plan._id, { saved: true, expectedIncome: 0 });
+	data = await invoke(projections.list, db, { spaceId: privateId });
+	assert.equal(data.savedPlan, false);
+	assert.equal(data.savingsTarget, 0);
+	assert.match(
+		prepareProjection(data).errors.join(" "),
+		/Save a balanced monthly budget/,
+	);
+	await db.patch(plan._id, { expectedIncome: 100000 });
+	data = await invoke(projections.list, db, { spaceId: privateId });
+	assert.equal(data.savedPlan, true);
+	assert.equal(data.savingsTarget, 100000);
+	assert.ok(prepareProjection(data).points.length > 0);
+});

@@ -22,6 +22,14 @@ type MonthArgs = { spaceId: Id<"spaces">; month: string };
  * Future saved plans cannot fund an earlier month's goals. */
 export async function summary(ctx: QueryCtx | MutationCtx, args: MonthArgs) {
 	await access(ctx, args.spaceId);
+	return internalSummary(ctx, args);
+}
+
+/** Internal calculation; callers must check access before exposing any result. */
+export async function internalSummary(
+	ctx: QueryCtx | MutationCtx,
+	args: MonthArgs,
+) {
 	month(args.month);
 	const all = await ctx.db
 		.query("funds")

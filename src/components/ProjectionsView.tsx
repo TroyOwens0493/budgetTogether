@@ -118,16 +118,18 @@ export function ProjectionsView({
 			<div className="projection-funding panel">
 				<div>
 					<span className="eyebrow">MONTHLY SAVINGS TARGET · {data.month}</span>
-					<strong>{usd(data.savingsTarget)}</strong>
+					<strong>
+						{data.savedPlan ? usd(data.savingsTarget) : "Budget not saved"}
+					</strong>
 				</div>
 				<div>
 					<small>To investments</small>
-					<strong>{usd(forecast.allocated)}</strong>
+					<strong>{data.savedPlan ? usd(forecast.allocated) : "—"}</strong>
 				</div>
 				<div>
 					<small>To cash savings</small>
 					<strong className={forecast.cashMonthly < 0 ? "over" : ""}>
-						{usd(forecast.cashMonthly)}
+						{data.savedPlan ? usd(forecast.cashMonthly) : "—"}
 					</strong>
 				</div>
 				<button

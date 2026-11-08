@@ -3,7 +3,11 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { access } from "../access";
 import { summary as fundSummary } from "./funds";
-import { recipients, sharedForPersonal } from "./personalFunding";
+import {
+	allocations as personalAllocations,
+	recipients,
+	sharedForPersonal,
+} from "./personalFunding";
 
 export async function funding(
 	ctx: QueryCtx | MutationCtx,
@@ -63,18 +67,19 @@ export async function funding(
 			}
 		return value;
 	}
-	const personalIncoming = await ctx.db
-		.query("personalAllocations")
-		.withIndex("by_private", (q) => q.eq("privateId", spaceId).eq("month", m))
-		.collect();
-	const personalOutgoing = await ctx.db
-		.query("personalAllocations")
-		.withIndex("by_shared", (q) => q.eq("sharedId", spaceId).eq("month", m))
-		.collect();
-	const allocatedIn = personalIncoming.reduce((sum, x) => sum + x.amount, 0);
+	const space = await ctx.db.get(spaceId);
+	const sharedId = space ? await sharedForPersonal(ctx, space, m) : null;
+	const personalIncoming = sharedId
+		? await personalAllocations(ctx, sharedId, m)
+		: [];
+	const ownAllocation = personalIncoming.find((x) => x.privateId === spaceId);
+	const personalOutgoing =
+		space?.type === "shared" ? await personalAllocations(ctx, spaceId, m) : [];
+	const allocatedIn = ownAllocation?.amount ?? 0;
 	const allocatedOut = personalOutgoing.reduce((sum, x) => sum + x.amount, 0);
 	return {
 		personalIncoming: allocatedIn,
+		automaticPersonalFunding: Boolean(ownAllocation?.automatic),
 		personalOutgoing: allocatedOut,
 		outgoing: allocatedOut + outgoing.reduce((s, x) => s + x.planned, 0),
 		incoming: allocatedIn + incoming.reduce((s, x) => s + x.planned, 0),

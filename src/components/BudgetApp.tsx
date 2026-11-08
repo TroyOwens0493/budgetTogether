@@ -81,7 +81,13 @@ function BudgetAppContent({ home }: { home: Home }) {
 	);
 	const [view, setView] = useState<string>("overview");
 	const pageName = nav.find(([id]) => id === view)?.[1] ?? "Settings";
-	const [notice, setNotice] = useState("");
+	const noticeContext = `${space._id}:${month}:${view}`;
+	const [notice, updateNotice] = useState({ text: "", context: noticeContext });
+	const setNotice = (text: string) =>
+		updateNotice({ text, context: noticeContext });
+	useEffect(() => {
+		updateNotice({ text: "", context: noticeContext });
+	}, [noticeContext]);
 	const [error, setError] = useState("");
 	const [busy, setBusy] = useState(false);
 	const data = useQuery(api.budgets.dashboard, { spaceId: space._id, month });
@@ -214,12 +220,12 @@ function BudgetAppContent({ home }: { home: Home }) {
 				{error && (
 					<ErrorBanner message={error} onDismiss={() => setError("")} />
 				)}
-				{notice && (
+				{notice.text && notice.context === noticeContext && (
 					<div className="save-notice" aria-live="polite">
-						{notice}
+						{notice.text}
 					</div>
 				)}
-				<div aria-busy={busy}>
+				<div aria-busy={busy} onChangeCapture={() => setNotice("")}>
 					{view === "projections" ? (
 						<ProjectionsView
 							key={space._id}

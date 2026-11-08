@@ -1,5 +1,5 @@
 import { ConvexError } from "convex/values";
-import { assertRevision, isPlanSaved, money } from "../../src/domain/budget";
+import { assertRevision, money } from "../../src/domain/budget";
 import {
 	annualReturn,
 	calendarDate,
@@ -10,6 +10,10 @@ import type { Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { access, label } from "../access";
 import type { fixedIncome, investmentType } from "../projectionTypes";
+import { funding } from "./accounting";
+import { summary as fundSummary } from "./funds";
+import { sharedForPersonal } from "./personalFunding";
+import { planState } from "./reporting";
 
 export function today(timeZone: string) {
 	const parts = new Intl.DateTimeFormat("en-CA", {
@@ -46,10 +50,16 @@ export async function list(ctx: QueryCtx, spaceId: Id<"spaces">) {
 		.query("projectionSettings")
 		.withIndex("by_space", (q) => q.eq("spaceId", spaceId))
 		.unique();
-	const plan = await ctx.db
+	const rawPlan = await ctx.db
 		.query("plans")
 		.withIndex("by_month", (q) => q.eq("spaceId", spaceId).eq("month", month))
 		.unique();
+	const { plan } = planState(
+		rawPlan,
+		await sharedForPersonal(ctx, space, month),
+		await funding(ctx, spaceId, month),
+		await fundSummary(ctx, { spaceId, month }),
+	);
 	const accounts = await ctx.db
 		.query("accounts")
 		.withIndex("by_space", (q) => q.eq("spaceId", spaceId))
@@ -114,8 +124,8 @@ export async function list(ctx: QueryCtx, spaceId: Id<"spaces">) {
 		settings,
 		month,
 		startsOn,
-		savingsTarget: plan?.savingsTarget ?? 0,
-		savedPlan: isPlanSaved(plan),
+		savingsTarget: plan?.saved ? plan.savingsTarget : 0,
+		savedPlan: Boolean(plan?.saved),
 		accounts: entries.filter(
 			(a) => a.investment || ["checking", "savings"].includes(a.type),
 		),

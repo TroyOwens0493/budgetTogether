@@ -2,30 +2,23 @@ import { ConvexError, v } from "convex/values";
 import { assertRevision, money, month } from "../src/domain/budget";
 import { mutation, query } from "./_generated/server";
 import { access } from "./access";
-import { recipients } from "./model/personalFunding";
+import { allocations, recipients } from "./model/personalFunding";
 
 export const list = query({
 	args: { sharedId: v.id("spaces"), month: v.string() },
 	handler: async (ctx, args) => {
 		await access(ctx, args.sharedId);
 		month(args.month);
-		const people = await recipients(ctx, args.sharedId, args.month);
-		const rows = await ctx.db
-			.query("personalAllocations")
-			.withIndex("by_shared", (q) =>
-				q.eq("sharedId", args.sharedId).eq("month", args.month),
-			)
-			.collect();
-		return people.map((person) => {
-			const row = rows.find((x) => x.privateId === person.privateId);
-			return {
-				privateId: person.privateId,
-				name: person.name,
-				active: person.active,
-				amount: row?.amount ?? 0,
-				revision: row?.revision ?? 0,
-			};
-		});
+		return (await allocations(ctx, args.sharedId, args.month)).map(
+			({ privateId, name, active, amount, revision, automatic }) => ({
+				privateId,
+				name,
+				active,
+				amount,
+				revision,
+				automatic,
+			}),
+		);
 	},
 });
 

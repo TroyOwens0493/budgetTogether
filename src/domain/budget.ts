@@ -173,3 +173,21 @@ export function recurring(
 		];
 	});
 }
+
+/** Shared funding covers the personal plan after its own carry-forward. */
+export function personalFundingRequired(
+	plan: Pick<Plan, "limits" | "savingsTarget"> | null,
+	fundAmount = 0,
+	carry = 0,
+): number {
+	return money(
+		Math.max(
+			0,
+			(plan?.limits.reduce((sum, limit) => sum + limit.amount, 0) ?? 0) +
+				(plan?.savingsTarget ?? 0) +
+				fundAmount -
+				carry,
+		),
+		true,
+	);
+}

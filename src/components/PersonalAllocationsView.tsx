@@ -10,6 +10,7 @@ type Person = {
 	privateId: Id<"spaces">;
 	name: string;
 	active: boolean;
+	automatic: boolean;
 	amount: number;
 	revision: number;
 };
@@ -29,11 +30,12 @@ export function PersonalAllocationsView(props: Props) {
 		<section className="panel">
 			<h2>Personal budget funding</h2>
 			<p>
-				Assign a monthly amount to each personal budget. It reduces shared
-				funding and is available at once. No bank transfer is needed.
+				Personal budgets are funded automatically from their spending limits,
+				savings targets, and fund goals, after carry-forward. No bank transfer
+				is needed.
 			</p>
 			<p className="muted">
-				Both partners can change these amounts. Personal spending and
+				Both partners can set a manual amount below. Personal spending and
 				transactions stay private. After a change, balance and save the affected
 				budgets.
 			</p>
@@ -41,7 +43,11 @@ export function PersonalAllocationsView(props: Props) {
 				<p>Loading personal funding…</p>
 			) : (
 				people.map((person) => (
-					<AllocationRow key={person.privateId} {...props} person={person} />
+					<AllocationRow
+						key={`${person.privateId}:${person.automatic ? person.amount : "manual"}`}
+						{...props}
+						person={person}
+					/>
 				))
 			)}
 		</section>
@@ -97,6 +103,11 @@ function AllocationRow({
 				}}
 			>
 				<fieldset disabled={!active || !person.active || saving}>
+					{person.automatic && (
+						<small>
+							Automatic funding · Saving an amount below sets a manual override.
+						</small>
+					)}
 					<MoneyInput
 						name="amount"
 						value={snapshot.amount}
