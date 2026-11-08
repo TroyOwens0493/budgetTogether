@@ -268,11 +268,69 @@ async function saveAmount(page: Page, amount: string) {
 	await form
 		.getByLabel("Alice's personal amount", { exact: true })
 		.fill(amount);
-	await form.getByRole("button", { name: "Save amount" }).click();
+	await form.getByLabel("Alice's personal amount", { exact: true }).blur();
 	await expect(
 		page.getByText("Personal funding saved.", { exact: true }),
 	).toBeVisible();
 }
+
+test("personal funding saves on blur and Enter and survives a reload", async ({
+	household: { alice },
+}) => {
+	await openMonthly(alice);
+	const input = alice.getByLabel("Alice's personal amount", { exact: true });
+	await expect(
+		allocationForm(alice).getByRole("button", { name: "Save amount" }),
+	).toHaveCount(0);
+	await saveAmount(alice, "125.50");
+	await openMonthly(alice);
+	await expect(input).toHaveValue("125.50");
+	await input.fill("150.00");
+	await input.press("Enter");
+	await expect(
+		alice.getByText("Personal funding saved.", { exact: true }),
+	).toBeVisible();
+	await openMonthly(alice);
+	await expect(input).toHaveValue("150.00");
+});
+
+test("failed personal funding autosaves retain the amount and can be retried", async ({
+	household: { alice },
+}) => {
+	await openMonthly(alice);
+	let writes = 0;
+	await alice.route("**/__fixture/invoke", async (route) => {
+		if (route.request().postDataJSON()?.name === "personalAllocations:save") {
+			writes++;
+			if (writes === 1) {
+				await route.fulfill({
+					status: 503,
+					json: { error: "Save unavailable." },
+				});
+				return;
+			}
+		}
+		await route.continue();
+	});
+	const input = alice.getByLabel("Alice's personal amount", { exact: true });
+	await input.focus();
+	await input.blur();
+	await input.fill("125.50");
+	await input.blur();
+	const retry = allocationForm(alice).getByRole("button", {
+		name: "Retry save",
+	});
+	await expect(retry).toBeVisible();
+	await expect(input).toHaveValue("125.50");
+	expect(writes).toBe(1);
+	await retry.click();
+	await expect(
+		alice.getByText("Personal funding saved.", { exact: true }),
+	).toBeVisible();
+	expect(writes).toBe(2);
+	await openMonthly(alice);
+	await expect(input).toHaveValue("125.50");
+});
 
 test.describe("budget overspending notifications", () => {
 	test.use({ overspending: true });
@@ -400,9 +458,7 @@ test("invalid plan and funding amounts cannot save the last valid total", async 
 	const personal = alice.getByLabel("Alice's personal amount", { exact: true });
 	for (const invalid of ["12.345", "-1.00", ""]) {
 		await personal.fill(invalid);
-		await allocationForm(alice)
-			.getByRole("button", { name: "Save amount" })
-			.click();
+		await personal.blur();
 		await expect(personal).toHaveAttribute("aria-invalid", "true");
 	}
 	expect(writes).toEqual([]);
@@ -540,9 +596,14 @@ test("two members must load changed personal funding before saving their own amo
 	await expect(
 		allocationForm(bob).getByLabel("Alice's personal amount", { exact: true }),
 	).toHaveValue("75.00");
+	await allocationForm(bob)
+		.getByLabel("Alice's personal amount", { exact: true })
+		.blur();
 	await expect(
-		allocationForm(bob).getByRole("button", { name: "Save amount" }),
-	).toBeDisabled();
+		allocationForm(alice).getByLabel("Alice's personal amount", {
+			exact: true,
+		}),
+	).toHaveValue("125.50");
 	await bob.getByRole("button", { name: "Load current amount" }).click();
 	await expect(
 		allocationForm(bob).getByLabel("Alice's personal amount", { exact: true }),

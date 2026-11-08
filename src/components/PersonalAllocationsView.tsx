@@ -1,8 +1,9 @@
 import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { cents } from "../domain/budget";
+import { amountError } from "../domain/validation";
 import { MoneyInput } from "./ui";
 import type { Run } from "./view-types";
 
@@ -35,16 +36,16 @@ export function PersonalAllocationsView(props: Props) {
 				is needed.
 			</p>
 			<p className="muted">
-				Both partners can set a manual amount below. Personal spending and
-				transactions stay private. After a change, balance and save the affected
-				budgets.
+				Both partners can set a manual amount below. Amounts save when you leave
+				the field or press Enter. Personal spending and transactions stay
+				private. After a change, balance and save the affected budgets.
 			</p>
 			{!people ? (
 				<p>Loading personal funding…</p>
 			) : (
 				people.map((person) => (
 					<AllocationRow
-						key={`${person.privateId}:${person.automatic ? person.amount : "manual"}`}
+						key={`${props.sharedId}:${props.month}:${person.privateId}`}
 						{...props}
 						person={person}
 					/>
@@ -64,46 +65,82 @@ function AllocationRow({
 	const save = useMutation(api.personalAllocations.save);
 	const [snapshot, setSnapshot] = useState(person);
 	const [saving, setSaving] = useState(false);
+	const [failed, setFailed] = useState(false);
+	const [dirty, setDirty] = useState(false);
+	const inFlight = useRef(false);
+	// Automatic amounts can change without an allocation record revision.
+	const automaticChanged =
+		snapshot.automatic && person.automatic && person.amount !== snapshot.amount;
+	if (automaticChanged && !dirty) setSnapshot(person);
+	const stale = person.revision > snapshot.revision || automaticChanged;
+	async function saveAmount(form: HTMLFormElement) {
+		if (!active || !person.active || inFlight.current || stale) return;
+		const value = String(new FormData(form).get("amount"));
+		if (amountError(value)) return;
+		const amount = cents(value);
+		if (amount === snapshot.amount) return;
+		inFlight.current = true;
+		setSaving(true);
+		setFailed(false);
+		try {
+			const saved = await run(
+				() =>
+					save({
+						sharedId,
+						privateId: person.privateId,
+						month,
+						amount,
+						revision: snapshot.revision,
+					}),
+				"Personal funding saved.",
+			);
+			if (saved) {
+				setDirty(false);
+				setSnapshot({
+					...person,
+					automatic: false,
+					amount,
+					revision: snapshot.revision + 1,
+				});
+			}
+			setFailed(!saved);
+		} finally {
+			inFlight.current = false;
+			setSaving(false);
+		}
+	}
 	return (
 		<>
-			{person.revision > snapshot.revision && (
+			{stale && (
 				<div className="banner" role="alert">
 					{person.name}'s funding changed. Your unsaved amount is still here.{" "}
 					<button
 						type="button"
 						className="secondary"
-						onClick={() => setSnapshot(person)}
+						onClick={() => {
+							setSnapshot(person);
+							setDirty(false);
+							setFailed(false);
+						}}
 					>
 						Load current amount
 					</button>
 				</div>
 			)}
 			<form
-				key={snapshot.revision}
+				key={`${snapshot.revision}:${snapshot.amount}`}
 				className="inline-form"
-				onSubmit={async (event) => {
+				onBlur={(event) => {
+					if (event.target instanceof HTMLInputElement)
+						void saveAmount(event.currentTarget);
+				}}
+				onSubmit={(event) => {
 					event.preventDefault();
-					if (saving || person.revision > snapshot.revision) return;
-					const form = new FormData(event.currentTarget);
-					setSaving(true);
-					let amount = snapshot.amount;
-					const saved = await run(() => {
-						amount = cents(String(form.get("amount")));
-						return save({
-							sharedId,
-							privateId: person.privateId,
-							month,
-							amount,
-							revision: snapshot.revision,
-						});
-					}, "Personal funding saved.");
-					if (saved)
-						setSnapshot({ ...person, amount, revision: snapshot.revision + 1 });
-					setSaving(false);
+					void saveAmount(event.currentTarget);
 				}}
 			>
 				<fieldset disabled={!active || !person.active || saving}>
-					{person.automatic && (
+					{snapshot.automatic && (
 						<small>
 							Automatic funding · Saving an amount below sets a manual override.
 						</small>
@@ -112,10 +149,16 @@ function AllocationRow({
 						name="amount"
 						value={snapshot.amount}
 						label={`${person.name}'s personal amount`}
+						onChange={() => setDirty(true)}
 					/>
-					<button type="submit" disabled={person.revision > snapshot.revision}>
-						Save amount
-					</button>
+					<output>
+						{saving ? "Saving…" : failed ? "Amount not saved. Try again." : ""}
+					</output>
+					{failed && (
+						<button type="submit" disabled={stale}>
+							Retry save
+						</button>
+					)}
 				</fieldset>
 			</form>
 		</>
