@@ -33,6 +33,8 @@ const handlers = new Map<string, unknown>([
 	["budgets:recurring", budgets.recurring],
 	["budgets:transactions", budgets.transactions],
 	["budgets:categories", budgets.categories],
+	["budgets:saveCategory", budgets.saveCategory],
+	["budgets:deleteCategory", budgets.deleteCategory],
 	["budgets:saveTransaction", budgets.saveTransaction],
 	["accounts:list", accounts.list],
 	["accounts:connections", accounts.connections],

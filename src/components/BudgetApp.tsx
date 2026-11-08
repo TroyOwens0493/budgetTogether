@@ -242,6 +242,8 @@ function BudgetAppContent({ home }: { home: Home }) {
 						<p aria-live="polite">Loading this month…</p>
 					) : view === "overview" ? (
 						<OverviewView
+							key={space._id}
+							run={run}
 							spaceId={space._id}
 							month={month}
 							active={space.active}

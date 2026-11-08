@@ -3,16 +3,18 @@ import { ArrowLeftRight, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { CategoryEditor } from "./CategoryEditor";
 import { SpendingChart } from "./SpendingChart";
 import { Summary } from "./Summary";
 import { usd } from "./ui";
-import type { Dashboard } from "./view-types";
+import type { Dashboard, Run } from "./view-types";
 
 export function OverviewView({
 	data,
 	spaceId,
 	month,
 	active,
+	run,
 	onOpenPlan,
 	onOpenTransactions,
 }: {
@@ -20,10 +22,12 @@ export function OverviewView({
 	spaceId: Id<"spaces">;
 	month: string;
 	active: boolean;
+	run: Run;
 	onOpenPlan: () => void;
 	onOpenTransactions: () => void;
 }) {
 	const [chartCategory, setChartCategory] = useState("");
+	const [categoryOpen, setCategoryOpen] = useState(false);
 	const fromDate = new Date(`${month}-01T12:00:00Z`);
 	fromDate.setUTCMonth(fromDate.getUTCMonth() - 5);
 	const from = fromDate.toISOString().slice(0, 7);
@@ -47,7 +51,18 @@ export function OverviewView({
 			)}
 			<div className="dashboard-grid">
 				<section className="panel">
-					<h2>Category balances</h2>
+					<div className="section-heading">
+						<h2>Category balances</h2>
+						<button
+							type="button"
+							className="secondary options-button"
+							disabled={!active}
+							aria-haspopup="dialog"
+							onClick={() => setCategoryOpen(true)}
+						>
+							Manage categories <span aria-hidden="true">↗</span>
+						</button>
+					</div>
 					{data.categories.map((c, i) => {
 						const limit =
 							data.plan?.limits.find((x) => x.categoryId === c._id)?.amount ??
@@ -250,6 +265,14 @@ export function OverviewView({
 						))}
 					<p role="alert">{error}</p>
 				</section>
+			)}
+			{categoryOpen && (
+				<CategoryEditor
+					spaceId={spaceId}
+					run={run}
+					categories={data.categories}
+					onClose={() => setCategoryOpen(false)}
+				/>
 			)}
 		</>
 	);

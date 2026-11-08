@@ -84,7 +84,7 @@ export function AccountsView({
 							</div>
 							<button
 								type="button"
-								className="secondary account-options-button"
+								className="secondary options-button account-options-button"
 								disabled={!active || !a.active}
 								aria-haspopup="dialog"
 								onClick={() => setEditingAccount(a._id)}

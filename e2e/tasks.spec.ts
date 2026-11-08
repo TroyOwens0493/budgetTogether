@@ -344,6 +344,56 @@ test("failed budget saves retain personal funding edits for a retry", async ({
 	await expect(input).toHaveValue("125.50");
 });
 
+test("category management opens from the Overview card and updates transaction filters", async ({
+	household: { alice },
+}) => {
+	await openMonthly(alice);
+	await alice.getByRole("button", { name: "Overview", exact: true }).click();
+	const card = alice.locator("section").filter({
+		has: alice.getByRole("heading", {
+			name: "Category balances",
+			exact: true,
+		}),
+	});
+	await card
+		.getByRole("button", { name: "Manage categories", exact: true })
+		.click();
+	const dialog = alice.getByRole("dialog", {
+		name: "Manage categories",
+		exact: true,
+	});
+	await dialog.getByLabel("Name", { exact: true }).fill("Pets");
+	await dialog
+		.getByRole("button", { name: "Create category", exact: true })
+		.click();
+	await expect(dialog).toHaveCount(0);
+	await expect(card.getByText("Pets", { exact: true })).toBeVisible();
+	await card
+		.getByRole("button", { name: "Manage categories", exact: true })
+		.click();
+	await dialog
+		.getByLabel("Category", { exact: true })
+		.selectOption({ label: "Pets" });
+	await dialog.getByLabel("Name", { exact: true }).fill("Pet care");
+	await dialog
+		.getByRole("button", { name: "Save changes", exact: true })
+		.click();
+	await expect(dialog).toHaveCount(0);
+	await expect(card.getByText("Pet care", { exact: true })).toBeVisible();
+	await alice
+		.getByRole("button", { name: "Transactions", exact: true })
+		.click();
+	await expect(
+		alice.getByRole("button", { name: "Manage categories", exact: true }),
+	).toHaveCount(0);
+	await expect(
+		alice
+			.getByRole("combobox", { name: "Category filter", exact: true })
+			.locator("option")
+			.filter({ hasText: "Pet care" }),
+	).toHaveCount(1);
+});
+
 test("Overview opens the monthly plan and saves edits", async ({
 	household: { alice },
 }) => {

@@ -1385,6 +1385,8 @@ dialog::backdrop {
 }
 .account-options-button {
 	margin-top: auto;
+}
+.options-button {
 	min-height: 32px;
 	padding: 5px 10px;
 	font-size: 12px;
