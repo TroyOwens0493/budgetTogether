@@ -78,22 +78,25 @@ export function InviteReview({
 			{review?.state === "ready" && (
 				<>
 					<p>
-						<strong>{review.inviterName}</strong> invited you to create a shared
-						budget.
+						<strong>
+							{review.inviterName} invited you to create a shared budget.
+						</strong>
 					</p>
-					<p>
-						Accepting creates a new shared budget with equal access for both of
-						you. Your private budgets stay separate. Each of you chooses which
-						accounts to move.
+					<ul className="invite-details">
+						<li>
+							Accepting creates a new shared budget with equal access for both
+							of you.
+						</li>
+						<li>Your private budgets stay separate.</li>
+						<li>
+							If you have a pending invitation to someone else, accepting this
+							invitation will cancel it.
+						</li>
+					</ul>
+					<p className="muted">
+						You are signed in as {email}. Expires{" "}
+						{new Date(review.expiresAt).toLocaleString()}.
 					</p>
-					<p>
-						If you have a pending invitation to someone else, accepting this
-						invitation will cancel it.
-					</p>
-					<p>
-						You are signed in as <strong>{email}</strong>.
-					</p>
-					<p>Expires {new Date(review.expiresAt).toLocaleString()}.</p>
 					<button
 						type="button"
 						disabled={busy}

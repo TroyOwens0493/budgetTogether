@@ -105,7 +105,11 @@ test("send, review and accept creates a shared budget for both sessions with def
 	await expect(
 		bob.getByRole("heading", { name: "Shared budget invitation" }),
 	).toBeVisible();
-	await expect(bob.getByText("Alice", { exact: true })).toBeVisible();
+	await expect(
+		bob.getByText("Alice invited you to create a shared budget.", {
+			exact: true,
+		}),
+	).toBeVisible();
 	await expect(alice.getByLabel("Budget space").locator("option")).toHaveCount(
 		1,
 	);
