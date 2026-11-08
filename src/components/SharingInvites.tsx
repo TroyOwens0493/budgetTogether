@@ -107,10 +107,6 @@ export function SharingInvites({ email, run }: { email: string; run: Run }) {
 								validate={(value) => partnerEmailError(value, email)}
 							/>
 						</label>
-						<p>
-							They can create an account if needed. The invitation lasts seven
-							days.
-						</p>
 						<button type="submit" disabled={Boolean(recipientError)}>
 							{busy ? "Sending…" : "Send invitation"}
 						</button>
