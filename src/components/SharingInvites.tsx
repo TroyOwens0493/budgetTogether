@@ -28,11 +28,6 @@ export function SharingInvites({ email, run }: { email: string; run: Run }) {
 	return (
 		<section className="panel narrow shared-budget-setup">
 			<h2>Start a shared budget</h2>
-			<p>
-				Invite one person by email. Your shared budget is created only after
-				they accept. Your private budgets stay separate, and each of you chooses
-				which accounts to move.
-			</p>
 			{outgoing === undefined ? (
 				<p aria-live="polite">Loading invitations…</p>
 			) : outgoing ? (
