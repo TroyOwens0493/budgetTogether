@@ -3,12 +3,11 @@ import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { labelError } from "../domain/validation";
 import { openPlaid } from "../lib/plaid-link";
+import { AccountOptions } from "./AccountOptions";
 import { ContributionsView } from "./ContributionsView";
 import { SharingInvites } from "./SharingInvites";
 import { ConfirmModal, Modal } from "./ui";
-import { ValidatedInput } from "./ValidatedInput";
 import type { ViewProps } from "./view-types";
 export function AccountsView({
 	spaceId,
@@ -27,23 +26,17 @@ export function AccountsView({
 	const exchange = useAction(api.bank.exchange);
 	const sync = useAction(api.bank.sync);
 	const disconnect = useAction(api.bank.disconnect);
-	const rename = useMutation(api.accounts.rename);
-	const move = useMutation(api.accounts.move);
 	const leave = useMutation(api.sharing.leave);
 	const [reviewing, setReviewing] = useState<Id<"connections"> | null>(null);
 	const [leaving, setLeaving] = useState<Id<"spaces"> | null>(null);
-	const [renaming, setRenaming] = useState<
-		NonNullable<typeof accounts>[number] | null
-	>(null);
-	const [renamePending, setRenamePending] = useState(false);
+	const [editingAccount, setEditingAccount] = useState<Id<"accounts"> | null>(
+		null,
+	);
 	const [disconnecting, setDisconnecting] = useState<Id<"connections"> | null>(
 		null,
 	);
-	const [moving, setMoving] = useState<
-		NonNullable<typeof accounts>[number] | null
-	>(null);
 	const space = home.spaces.find((x) => x._id === spaceId)!;
-	const destination = home.spaces.find((x) => x.active && x._id !== spaceId);
+	const selectedAccount = accounts?.find((a) => a._id === editingAccount);
 	const hasSharedBudget = home.spaces.some(
 		(x) => x.type === "shared" && x.active,
 	);
@@ -79,37 +72,28 @@ export function AccountsView({
 			</div>
 			<section className="panel">
 				<h2>Accounts in this budget</h2>
-				{accounts?.map((a) => (
-					<div className="account-row" key={a._id}>
-						<div>
-							<strong>{a.name}</strong>
-							<small>
-								{a.type} · {a.mask} ·{" "}
-								{a.active ? "Current assignment" : "Historical records"}
-							</small>
-						</div>
-						<div className="button-row">
-							{a.canMove && (
-								<button
-									type="button"
-									className="secondary"
-									disabled={!active}
-									onClick={() => setMoving(a)}
-								>
-									Move account
-								</button>
-							)}
+				<div className="accounts-grid">
+					{accounts?.map((a) => (
+						<article className="budget-account-card" key={a._id}>
+							<div>
+								<strong>{a.name}</strong>
+								<small>
+									{a.type} · {a.mask} ·{" "}
+									{a.active ? "Current assignment" : "Historical records"}
+								</small>
+							</div>
 							<button
 								type="button"
-								className="secondary"
+								className="secondary account-options-button"
 								disabled={!active || !a.active}
-								onClick={() => setRenaming(a)}
+								aria-haspopup="dialog"
+								onClick={() => setEditingAccount(a._id)}
 							>
-								Rename
+								Options <span aria-hidden="true">↗</span>
 							</button>
-						</div>
-					</div>
-				))}
+						</article>
+					))}
+				</div>
 				{!accounts?.length && (
 					<p className="empty-state">
 						No accounts yet. Connect a bank to import transactions
@@ -211,66 +195,16 @@ export function AccountsView({
 							run={run}
 						/>
 					))}
-			{renaming && (
-				<Modal
-					title="Rename account"
-					onClose={() => !renamePending && setRenaming(null)}
-				>
-					<form
-						onSubmit={async (e) => {
-							e.preventDefault();
-							if (renamePending) return;
-							const name = String(
-								new FormData(e.currentTarget).get("name"),
-							).trim();
-							if (!name) return;
-							setRenamePending(true);
-							try {
-								if (
-									await run(
-										() =>
-											rename({
-												id: renaming._id,
-												name,
-												revision: renaming.revision,
-											}),
-										"Account renamed.",
-									)
-								)
-									setRenaming(null);
-							} finally {
-								setRenamePending(false);
-							}
-						}}
-					>
-						<label htmlFor="accountsview-name">
-							Account name
-							<ValidatedInput
-								id="accountsview-name"
-								aria-label="Account name"
-								validate={labelError}
-								name="name"
-								defaultValue={renaming.name}
-								required
-								maxLength={100}
-								disabled={renamePending}
-							/>
-						</label>
-						<div className="button-row">
-							<button
-								type="button"
-								className="secondary"
-								disabled={renamePending}
-								onClick={() => setRenaming(null)}
-							>
-								Cancel
-							</button>
-							<button type="submit" disabled={renamePending}>
-								{renamePending ? "Saving…" : "Save account name"}
-							</button>
-						</div>
-					</form>
-				</Modal>
+			{selectedAccount && (
+				<AccountOptions
+					key={selectedAccount._id}
+					account={selectedAccount}
+					destinations={home.spaces.filter(
+						(x) => x.active && x._id !== spaceId,
+					)}
+					run={run}
+					close={() => setEditingAccount(null)}
+				/>
 			)}
 			{disconnecting && (
 				<ConfirmModal
@@ -306,45 +240,6 @@ export function AccountsView({
 						are kept.
 					</p>
 				</ConfirmModal>
-			)}
-			{moving && (
-				<Modal title="Move account" onClose={() => setMoving(null)}>
-					<p>
-						Only transactions from today onward will be assigned to the
-						destination budget. Earlier records stay in their current budget.
-						Existing private history stays private. Earlier shared history
-						remains available to both partners.
-					</p>
-					<form
-						onSubmit={async (e) => {
-							e.preventDefault();
-							if (!destination) return;
-							if (
-								await run(
-									() =>
-										move({
-											id: moving._id,
-											destinationId: destination._id,
-											revision: moving.revision,
-										}),
-									"Account moved. Earlier history was kept in its original budget.",
-								)
-							)
-								setMoving(null);
-						}}
-					>
-						<p>
-							<strong>Destination budget</strong>
-							<br />
-							{destination
-								? `${destination.name} · ${destination.type}`
-								: "No destination budget available."}
-						</p>
-						<button type="submit" disabled={!destination}>
-							Confirm account move
-						</button>
-					</form>
-				</Modal>
 			)}
 		</>
 	);
