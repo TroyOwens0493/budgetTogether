@@ -37,6 +37,8 @@ Use the address shown in the browser, including its protocol and port. Each conf
 
 The sandbox app is hosted at https://budget-together-sandbox.netlify.app. Netlify builds and deploys the app when changes are pushed to `main` in `TroyOwens0493/budgetTogether` on GitHub. Development work stays on `dev` and is merged into `main` for deployment.
 
+Before pushing a change to `main` that changes the Convex API, run `pnpm exec convex dev --once` against the sandbox's configured development deployment. Wait for the sync to pass before deploying the website. Netlify's build does not sync Convex, so pushing frontend and backend files together is not enough.
+
 `netlify.toml` sets the build command to `pnpm build`, the publish directory to `dist`, Node to version 24, and `NITRO_PRESET` to `netlify`. Nitro builds the server function for page rendering and `/api/auth/*`. Deploy the server function with the static files.
 
 Netlify uses `VITE_CONVEX_URL` and `VITE_CONVEX_SITE_URL` from `.env.local` for both builds and server functions. Plaid secrets stay on the existing Convex development deployment. The Plaid client uses Sandbox.

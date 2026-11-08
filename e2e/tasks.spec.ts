@@ -344,6 +344,82 @@ test("failed budget saves retain personal funding edits for a retry", async ({
 	await expect(input).toHaveValue("125.50");
 });
 
+test("Overview opens the monthly plan and saves edits", async ({
+	household: { alice },
+}) => {
+	await openMonthly(alice);
+	await alice.getByRole("button", { name: "Overview", exact: true }).click();
+	await alice
+		.getByRole("button", { name: "Edit monthly plan", exact: true })
+		.click();
+	await expect(
+		alice.getByRole("heading", { name: "Monthly spending", exact: true }),
+	).toBeVisible();
+	await alice
+		.getByLabel("Expected take-home income", { exact: true })
+		.fill("100.00");
+	await alice.getByLabel("Groceries", { exact: true }).fill("100.00");
+	await saveBudget(alice);
+	await openMonthly(alice);
+	await expect(alice.getByLabel("Groceries", { exact: true })).toHaveValue(
+		"100.00",
+	);
+});
+
+test("Overview can edit an older dashboard response without losing existing funding", async ({
+	household: { alice },
+}) => {
+	await openMonthly(alice);
+	await saveAmount(alice, "125.50");
+	let legacyResponse = true;
+	const savedArguments: Record<string, unknown>[] = [];
+	await alice.route("**/__fixture/invoke", async (route) => {
+		const request = route.request().postDataJSON();
+		if (request.name === "budgets:savePlan") savedArguments.push(request.args);
+		if (request.name === "budgets:dashboard" && legacyResponse) {
+			const response = await route.fetch();
+			const result = await response.json();
+			delete result.value.personalFunding;
+			await route.fulfill({ response, json: result });
+			return;
+		}
+		await route.continue();
+	});
+	await openMonthly(alice);
+	await alice.getByRole("button", { name: "Overview", exact: true }).click();
+	await alice
+		.getByRole("button", { name: "Edit monthly plan", exact: true })
+		.click();
+	await expect(
+		alice.getByRole("heading", { name: "Monthly spending", exact: true }),
+	).toBeVisible();
+	await expect(
+		alice.getByLabel("Alice's personal amount", { exact: true }),
+	).toHaveCount(0);
+	await saveBudget(alice);
+	expect(savedArguments).toHaveLength(1);
+	expect(savedArguments[0]).not.toHaveProperty("personalFunding");
+	await alice.getByLabel("Groceries", { exact: true }).fill("50.00");
+	legacyResponse = false;
+	await expect(
+		alice.getByLabel("Alice's personal amount", { exact: true }),
+	).toHaveValue("125.50");
+	await expect(alice.getByLabel("Groceries", { exact: true })).toHaveValue(
+		"50.00",
+	);
+	await alice
+		.getByLabel("Expected take-home income", { exact: true })
+		.fill("175.50");
+	await saveBudget(alice);
+	await openMonthly(alice);
+	await expect(
+		alice.getByLabel("Alice's personal amount", { exact: true }),
+	).toHaveValue("125.50");
+	await expect(alice.getByLabel("Groceries", { exact: true })).toHaveValue(
+		"50.00",
+	);
+});
+
 test.describe("budget overspending notifications", () => {
 	test.use({ overspending: true });
 

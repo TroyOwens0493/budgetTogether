@@ -30,20 +30,24 @@ export function PlanView({
 		createPlanDraft(data.plan, data.categories),
 	);
 	const [saving, setSaving] = useState(false);
-	const [fundingSnapshot, setFundingSnapshot] = useState(data.personalFunding);
+	// A cached response or an older server may not include the funding list yet.
+	const currentFunding = data.personalFunding ?? [];
+	const [fundingSnapshot, setFundingSnapshot] = useState<
+		Dashboard["personalFunding"] | undefined
+	>(data.personalFunding);
+	const fundingPeople = fundingSnapshot ?? currentFunding;
 	const [fundingAmounts, setFundingAmounts] = useState<Record<string, string>>(
 		{},
 	);
 	const personalFunding = evaluatePersonalFunding(
-		fundingSnapshot,
+		fundingPeople,
 		fundingAmounts,
 	);
 	const fundingStale =
-		fundingSignature(fundingSnapshot) !==
-		fundingSignature(data.personalFunding);
+		fundingSignature(fundingPeople) !== fundingSignature(currentFunding);
 	const outgoing = personalFunding
 		? data.funds.outgoing -
-			data.personalFunding.reduce((sum, x) => sum + x.amount, 0) +
+			currentFunding.reduce((sum, x) => sum + x.amount, 0) +
 			personalFunding.total
 		: data.funds.outgoing;
 	const result = evaluatePlanDraft(draft, data.categories, {
@@ -74,31 +78,34 @@ export function PlanView({
 						...plan,
 						revision: draft.revision,
 						fundSignature: data.fundPlan.signature,
-						personalFunding: shared
-							? {
-									signature: fundingSignature(fundingSnapshot),
-									changes: personalFunding.changes,
-								}
-							: undefined,
+						personalFunding:
+							shared && data.personalFunding !== undefined
+								? {
+										signature: fundingSignature(fundingPeople),
+										changes: personalFunding.changes,
+									}
+								: undefined,
 					}),
 				"Budget saved.",
 			);
 			if (saved) {
 				setDraft((current) => ({ ...current, revision: draft.revision + 1 }));
 				setFundingSnapshot(
-					fundingSnapshot.map((person) => {
-						const change = personalFunding.changes.find(
-							(x) => x.privateId === person.privateId,
-						);
-						return change
-							? {
-									...person,
-									amount: change.amount,
-									revision: person.revision + 1,
-									automatic: false,
-								}
-							: person;
-					}),
+					data.personalFunding === undefined
+						? undefined
+						: fundingPeople.map((person) => {
+								const change = personalFunding.changes.find(
+									(x) => x.privateId === person.privateId,
+								);
+								return change
+									? {
+											...person,
+											amount: change.amount,
+											revision: person.revision + 1,
+											automatic: false,
+										}
+									: person;
+							}),
 				);
 				setFundingAmounts({});
 			}
@@ -203,11 +210,12 @@ export function PlanView({
 						)}
 						{shared && (
 							<PersonalAllocationsView
-								people={fundingSnapshot}
+								people={fundingPeople}
 								amounts={fundingAmounts}
-								onChange={(id, value) =>
-									setFundingAmounts((current) => ({ ...current, [id]: value }))
-								}
+								onChange={(id, value) => {
+									setFundingSnapshot(fundingPeople);
+									setFundingAmounts((current) => ({ ...current, [id]: value }));
+								}}
 							/>
 						)}
 						<label htmlFor="budgetapp-target" className="allocation-row">
