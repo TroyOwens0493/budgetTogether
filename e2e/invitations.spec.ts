@@ -96,7 +96,7 @@ test("send, review and accept creates a shared budget for both sessions with def
 		.getByRole("button", { name: "Send invitation", exact: true })
 		.click();
 	await expect(
-		alice.getByText("Waiting for acceptance.", { exact: false }),
+		alice.getByText("Invitation email sent. Expires", { exact: false }),
 	).toBeVisible();
 	await expect(alice.getByLabel("Budget space").locator("option")).toHaveCount(
 		1,

@@ -38,7 +38,7 @@ export function SharingInvites({ email, run }: { email: string; run: Run }) {
 					<p>
 						{outgoing.expiresAt <= Date.now()
 							? "Invitation expired."
-							: "Waiting for acceptance."}{" "}
+							: "Invitation email sent."}{" "}
 						Expires {new Date(outgoing.expiresAt).toLocaleString()}.
 					</p>
 					<p
