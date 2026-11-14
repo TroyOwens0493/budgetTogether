@@ -184,9 +184,15 @@ Run isolated authenticated task tests with `pnpm exec playwright test --config e
 
 The project configuration at `.codex/config.toml` registers the `playwright` MCP server for Codex. It uses the local package and runs Chromium without a visible window. MCP output goes in `.playwright-mcp/`, which is ignored by Git. Start a new Codex session in this project after setup so it can load the server. Check the configuration with `codex mcp get playwright`. See the [Playwright MCP documentation](https://github.com/microsoft/playwright-mcp) and [official OpenAI MCP documentation](https://developers.openai.com/codex/mcp).
 
-## Current verification limits
+## Verification status and remaining limits
 
-The backend, including bank-sync tables, indexes, and Jev classification, is synced to the configured Convex development deployment. Jev was tested with a synthetic purchase and classified all 178 existing bank transactions; 37 required review and none failed. Isolated browser tests cover budget saves, persistence after reload, personal funding, classification review, and edits from two sessions using real UI and backend handlers with an in-memory database. Keep `pnpm dev` running so backend requests stay in sync with the UI. To sync the backend once, run `pnpm exec convex dev --once`. Registration, reset emails, partner emails, Plaid Link/imports, and live two-browser collaboration still need integration testing.
+The backend, including bank-sync tables, indexes, and Jev classification, is synced to the configured Convex development deployment. Jev was tested with a synthetic purchase and classified all 178 existing bank transactions; 37 required review and none failed. Isolated browser tests cover budget saves, persistence after reload, personal funding, classification review, and edits from two sessions using real UI and backend handlers with an in-memory database. Keep `pnpm dev` running so backend requests stay in sync with the UI. To sync the backend once, run `pnpm exec convex dev --once`.
+
+### Owner-reported verification (November 13, 2026, Mountain Time)
+
+Troy confirmed that the previously recommended end-to-end workflows are already working: registration and partner invitation acceptance, private/shared account behavior, shared and personal budget saves, two-session updates and conflict handling, and the transaction/accounting walkthrough. This records the owner's confirmation, not a new automated or independently observed test run. The exact environment, tested commit, device/browser matrix, and individual test results were not supplied. Do not treat these workflows as unfinished merely because older notes listed live acceptance testing as future work.
+
+This confirmation does not establish Plaid Production readiness, every institution's coverage, large-history performance, or a complete accessibility audit. Password-reset delivery and detailed failure/recovery cases were not individually documented in this update. Existing unit and isolated browser tests retain the scope and limitations described above and in `e2e/README.md`.
 
 Persistent Plaid account identifiers prevent duplicate connections where Plaid provides them. When no persistent ID is available, a match on bank, account type, and last four digits pauses the new connection. The user must identify it as the same account (keep the existing import) or a different account (import it). This check includes the current partner's accounts without returning their private account details. Imports, webhooks, and scheduled sync cannot bypass a pending review.
 
@@ -198,4 +204,4 @@ These limits apply to transaction pages and each bank sync step. Dashboard, acco
 
 ## Project workflow
 
-Work is on the `dev` branch. Team membership and project tracking are not yet configured in this repo. Add confirmed team members, sprint goals, and retrospective notes when the team and tracking tool are chosen. Future work includes live acceptance testing, production bank rollout, and larger-history query/import scaling. Investment tracking, payments, groups larger than two, non-US banks, other currencies, reminders, offline support, and subscription billing remain outside scope.
+Work is on the `dev` branch. Team membership and project tracking are not yet configured in this repo. Add confirmed team members, sprint goals, and retrospective notes when the team and tracking tool are chosen. Future work includes production bank rollout and larger-history query/import scaling; see the owner-reported verification above before planning additional acceptance work. Investment tracking, payments, groups larger than two, non-US banks, other currencies, reminders, offline support, and subscription billing remain outside scope.
