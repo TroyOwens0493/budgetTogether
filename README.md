@@ -33,6 +33,27 @@ pnpm exec convex dev --once
 
 Use the address shown in the browser, including its protocol and port. Each configured loopback address also accepts `localhost`, `127.0.0.1`, and `[::1]` with the same protocol and port. Other addresses must be listed explicitly. Hosted deployments accept only `SITE_URL` and any explicitly configured extra origins. Put this setting on Convex; `.env.local` alone does not configure backend authentication.
 
+## Development test accounts
+
+Use these test logins with the Convex development deployment `animated-fish-51`. The current remote development address is https://omarchy.tail2f4615.ts.net/ (Tailscale required). Use HTTPS because the deployment uses secure login cookies:
+
+### Budget Test
+
+- Email: `budget-test@example.com`
+- Password: `BudgetTest-Maple-2026!`
+- Name: Budget Test
+
+### Shared Budget Test
+
+- Email: `budget-shared@example.com`
+- Password: `BudgetShared-Cedar-2026!`
+- Name: Shared Budget Test
+- Reporting time zone: America/Boise
+
+Both test accounts are members of the same shared budget. Each also has its own private budget. Use the Personal / Shared toggle to switch between them.
+
+Use fake data only. These credentials are for development only. The example.com address has no inbox, so this account cannot test receipt of password reset or invitation emails.
+
 ## Netlify sandbox deployment
 
 The sandbox app is hosted at https://budget-together-sandbox.netlify.app. Netlify builds and deploys the app when changes are pushed to `main` in `TroyOwens0493/budgetTogether` on GitHub. Development work stays on `dev` and is merged into `main` for deployment.
