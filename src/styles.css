@@ -208,6 +208,22 @@ fieldset:disabled {
 	color: var(--muted);
 	letter-spacing: 1px;
 }
+.sidebar-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+}
+.mobile-menu-toggle {
+	display: none;
+}
+.sidebar-menu {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	gap: 32px;
+	min-height: 0;
+}
 .sidebar nav {
 	display: flex;
 	flex-direction: column;
@@ -951,36 +967,62 @@ dialog::backdrop {
 @media (max-width: 760px) {
 	.app-shell {
 		display: block;
+		position: relative;
 	}
 	.sidebar {
-		position: static;
+		display: none;
+		position: absolute;
+		top: 70px;
+		left: 0;
+		right: 0;
+		z-index: 20;
 		height: auto;
+		max-height: calc(100dvh - 70px);
+		overflow-y: auto;
 		border-right: 0;
 		border-bottom: 1px solid var(--border);
 		padding: 18px;
+		box-shadow: 0 12px 24px #20352818;
+	}
+	.sidebar:has(.sidebar-menu.is-open) {
+		display: flex;
+	}
+	.sidebar-header {
+		display: none;
+	}
+	.mobile-menu-toggle {
+		display: inline-flex;
+		flex-shrink: 0;
+		width: 44px;
+		min-height: 44px;
+		padding: 8px;
+		background: transparent;
+		color: var(--green);
+	}
+	.sidebar-menu {
+		display: none;
 		gap: 18px;
 	}
-	.sidebar > .brand {
-		font-size: 17px;
+	.sidebar-menu.is-open {
+		display: flex;
 	}
 	.space-select {
 		padding: 10px;
 	}
 	.sidebar nav {
-		flex-direction: row;
-		flex-wrap: wrap;
+		flex-direction: column;
 		gap: 4px;
 	}
 	.nav-item {
-		width: auto;
-		flex: 1;
-		font-size: 11px;
-		justify-content: center;
-		padding: 10px 6px;
-		gap: 6px;
+		width: 100%;
+		min-height: 44px;
+		font-size: 14px;
+		justify-content: flex-start;
+		padding: 12px;
+		gap: 12px;
 	}
 	.nav-item svg {
-		width: 15px;
+		width: 18px;
 	}
 	.sidebar-bottom {
 		display: flex;
@@ -1002,9 +1044,16 @@ dialog::backdrop {
 		min-height: 70px;
 		margin-bottom: 24px;
 		font-size: 11px;
+		gap: 6px;
+	}
+	.topbar .page-name {
+		flex: 1;
+		min-width: 0;
+		overflow-wrap: anywhere;
 	}
 	.topbar > div {
 		gap: 3px;
+		flex-shrink: 0;
 	}
 	.topbar .avatar {
 		display: none;
@@ -1013,7 +1062,7 @@ dialog::backdrop {
 		padding: 0 5px;
 	}
 	.month-picker input {
-		width: 138px;
+		width: clamp(104px, 32vw, 138px);
 		font-size: 11px;
 	}
 	.page-actions {

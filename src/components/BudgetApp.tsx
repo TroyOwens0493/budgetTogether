@@ -5,11 +5,13 @@ import {
 	Landmark,
 	LayoutDashboard,
 	LogOut,
+	Menu,
 	PiggyBank,
 	Settings,
 	TrendingUp,
+	X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { authClient } from "../lib/auth-client";
@@ -47,6 +49,24 @@ export function BudgetApp({ home }: { home: Home }) {
 }
 
 function BudgetAppContent({ home }: { home: Home }) {
+	const [menuOpen, setMenuOpen] = useState(false);
+	const menuId = useId();
+	const menuButton = useRef<HTMLButtonElement>(null);
+	const closeMenu = () => {
+		setMenuOpen(false);
+		menuButton.current?.focus();
+	};
+	useEffect(() => {
+		if (!menuOpen) return;
+		const onKeyDown = (event: KeyboardEvent) => {
+			if (event.key === "Escape") {
+				setMenuOpen(false);
+				menuButton.current?.focus();
+			}
+		};
+		document.addEventListener("keydown", onKeyDown);
+		return () => document.removeEventListener("keydown", onKeyDown);
+	}, [menuOpen]);
 	const [selected, setSelected] = useState(
 		home.spaces.find((x) => x.active && x.type === "shared")?._id ??
 			home.spaces.find((x) => x.active)?._id ??
@@ -134,64 +154,91 @@ function BudgetAppContent({ home }: { home: Home }) {
 	return (
 		<div className="app-shell">
 			<aside className="sidebar">
-				<a className="brand" href="/">
-					<span>b.</span> budget together
-				</a>
-				<label className="space-select">
-					<span className="eyebrow">YOUR SPACE</span>
-					<select
-						aria-label="Budget space"
-						value={space._id}
-						onChange={(e) => setSelected(e.target.value as Id<"spaces">)}
-					>
-						{home.spaces.map((s) => (
-							<option key={s._id} value={s._id}>
-								{s.name}
-							</option>
-						))}
-					</select>
-				</label>
-				<nav aria-label="Main navigation">
-					{nav.map(([id, name, Icon]) => (
-						<button
-							key={id}
-							type="button"
-							className={view === id ? "nav-item selected" : "nav-item"}
-							aria-current={view === id ? "page" : undefined}
-							onClick={() => setView(id)}
+				<div className="sidebar-header">
+					<a className="brand" href="/">
+						<span>b.</span> budget together
+					</a>
+				</div>
+				<div
+					id={menuId}
+					className={`sidebar-menu${menuOpen ? " is-open" : ""}`}
+				>
+					<label className="space-select">
+						<span className="eyebrow">YOUR SPACE</span>
+						<select
+							aria-label="Budget space"
+							value={space._id}
+							onChange={(e) => {
+								setSelected(e.target.value as Id<"spaces">);
+								closeMenu();
+							}}
 						>
-							<Icon size={18} />
-							{name}
+							{home.spaces.map((s) => (
+								<option key={s._id} value={s._id}>
+									{s.name}
+								</option>
+							))}
+						</select>
+					</label>
+					<nav aria-label="Main navigation">
+						{nav.map(([id, name, Icon]) => (
+							<button
+								key={id}
+								type="button"
+								className={view === id ? "nav-item selected" : "nav-item"}
+								aria-current={view === id ? "page" : undefined}
+								onClick={() => {
+									setView(id);
+									closeMenu();
+								}}
+							>
+								<Icon size={18} />
+								{name}
+							</button>
+						))}
+					</nav>
+					<div className="sidebar-bottom">
+						<button
+							className="nav-item"
+							type="button"
+							onClick={() => {
+								setView("profile");
+								closeMenu();
+							}}
+						>
+							<Settings size={18} />
+							Settings
 						</button>
-					))}
-				</nav>
-				<div className="sidebar-bottom">
-					<button
-						className="nav-item"
-						type="button"
-						onClick={() => setView("profile")}
-					>
-						<Settings size={18} />
-						Settings
-					</button>
-					<button
-						className="nav-item"
-						type="button"
-						onClick={() =>
-							run(async () => {
-								await authClient.signOut();
-								window.location.reload();
-							}, "Signed out.")
-						}
-					>
-						<LogOut size={18} />
-						Sign out
-					</button>
+						<button
+							className="nav-item"
+							type="button"
+							onClick={() =>
+								run(async () => {
+									await authClient.signOut();
+									window.location.reload();
+								}, "Signed out.")
+							}
+						>
+							<LogOut size={18} />
+							Sign out
+						</button>
+					</div>
 				</div>
 			</aside>
 			<main className="main-content">
 				<header className="topbar">
-					<span>
+					<button
+						type="button"
+						className="mobile-menu-toggle"
+						ref={menuButton}
+						aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+						aria-expanded={menuOpen}
+						aria-controls={menuId}
+						onClick={() => setMenuOpen((open) => !open)}
+					>
+						{menuOpen ? <X size={24} /> : <Menu size={24} />}
+					</button>
+					<span className="page-name">
 						{space.type === "shared" ? "Our household" : "Personal"}{" "}
 						<span className="slash">/</span> <strong>{pageName}</strong>
 					</span>
