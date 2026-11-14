@@ -43,9 +43,12 @@ const test = base.extend<{
 
 async function openMonthly(page: Page, space = "Shared") {
 	await page.goto("/e2e/fixtures/index.html");
-	await page.getByRole("combobox", { name: "Budget space" }).selectOption({
-		label: space,
-	});
+	await page
+		.getByRole("button", {
+			name: space === "Shared" ? "Shared" : "Personal",
+			exact: true,
+		})
+		.click();
 	await page.getByLabel("Reporting month").fill(month);
 	await page
 		.getByRole("button", { name: "Monthly budget", exact: true })
@@ -78,8 +81,8 @@ test("leaving deletes the shared budget for both open sessions and cancel keeps 
 	await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
 	await expect(dialog).toHaveCount(0);
 	await expect(
-		bob.getByRole("combobox", { name: "Budget space" }).locator("option"),
-	).toHaveCount(2);
+		bob.getByRole("button", { name: "Shared", exact: true }),
+	).toHaveCount(1);
 	await alice
 		.getByRole("button", { name: "Leave shared budget", exact: true })
 		.click();
@@ -90,11 +93,11 @@ test("leaving deletes the shared budget for both open sessions and cancel keeps 
 		})
 		.click();
 	for (const page of [alice, bob]) {
-		const selector = page.getByRole("combobox", { name: "Budget space" });
-		await expect(selector.locator("option")).toHaveCount(1);
-		await expect(selector.locator("option:checked")).toHaveText("My budget");
+		const toggle = page.getByRole("button", { name: "Shared", exact: true });
+		await expect(toggle).toHaveCount(0);
+		await expect(page.locator(".topbar")).toContainText("Personal");
 		await page.reload();
-		await expect(selector.locator("option")).toHaveCount(1);
+		await expect(toggle).toHaveCount(0);
 	}
 	expect(errors).toEqual([]);
 });
@@ -619,13 +622,9 @@ test("personal funding saves with the shared budget and requires the personal bu
 		.fill("1000.00");
 	await alice.getByLabel("Groceries", { exact: true }).fill("1000.00");
 	await saveBudget(alice);
-	await alice
-		.getByRole("combobox", { name: "Budget space" })
-		.selectOption({ label: "My budget" });
+	await alice.getByRole("button", { name: "Personal", exact: true }).click();
 	await saveBudget(alice);
-	await alice
-		.getByRole("combobox", { name: "Budget space" })
-		.selectOption({ label: "Shared" });
+	await alice.getByRole("button", { name: "Shared", exact: true }).click();
 	await alice
 		.getByLabel("Alice's personal amount", { exact: true })
 		.fill("125.50");
@@ -638,9 +637,7 @@ test("personal funding saves with the shared budget and requires the personal bu
 		alice.getByRole("button", { name: "Load current plan" }),
 	).toHaveCount(0);
 
-	await alice
-		.getByRole("combobox", { name: "Budget space" })
-		.selectOption({ label: "My budget" });
+	await alice.getByRole("button", { name: "Personal", exact: true }).click();
 	await expect(
 		alice.getByLabel("Expected take-home income", { exact: true }),
 	).toHaveCount(0);
@@ -656,9 +653,7 @@ test("personal funding saves with the shared budget and requires the personal bu
 	await expect(alice.getByLabel("Groceries", { exact: true })).toHaveValue(
 		"100.00",
 	);
-	await alice
-		.getByRole("combobox", { name: "Budget space" })
-		.selectOption({ label: "Shared" });
+	await alice.getByRole("button", { name: "Shared", exact: true }).click();
 	await expect(
 		alice.getByLabel("Alice's personal amount", { exact: true }),
 	).toHaveValue("125.50");

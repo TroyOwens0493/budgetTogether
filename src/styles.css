@@ -191,22 +191,26 @@ fieldset:disabled {
 	top: 0;
 	height: 100vh;
 }
-.space-select {
-	padding: 15px;
-	background: #f4f6f1;
-	border-radius: 9px;
-	margin: 0;
+.space-toggle {
+	display: grid;
+	grid-template-columns: repeat(2, minmax(0, 1fr));
+	gap: 4px;
+	padding: 4px;
+	border: 1px solid var(--border);
+	border-radius: 10px;
+	background: #f1f4ed;
 }
-.space-select select {
-	padding: 0;
-	border: 0;
+.space-toggle button {
+	min-height: 44px;
+	padding: 10px 6px;
 	background: transparent;
-	font-weight: 700;
-	min-height: 28px;
-}
-.space-select .eyebrow {
 	color: var(--muted);
-	letter-spacing: 1px;
+	font-size: 13px;
+}
+.space-toggle button[aria-pressed="true"] {
+	background: white;
+	color: var(--green);
+	box-shadow: 0 1px 4px #20352820;
 }
 .sidebar-header {
 	display: flex;
@@ -1005,9 +1009,6 @@ dialog::backdrop {
 	}
 	.sidebar-menu.is-open {
 		display: flex;
-	}
-	.space-select {
-		padding: 10px;
 	}
 	.sidebar nav {
 		flex-direction: column;

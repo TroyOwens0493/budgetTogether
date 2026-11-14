@@ -77,9 +77,9 @@ test("self-invites show a clear error and cannot be submitted", async ({
 	await expect(
 		alice.getByRole("button", { name: "Resend invitation", exact: true }),
 	).toHaveCount(0);
-	await expect(alice.getByLabel("Budget space").locator("option")).toHaveCount(
-		1,
-	);
+	await expect(
+		alice.getByRole("button", { name: "Shared", exact: true }),
+	).toHaveCount(0);
 	await recipient.fill("bob@example.test");
 	await expect(send).toBeEnabled();
 	await expect(
@@ -98,9 +98,9 @@ test("send, review and accept creates a shared budget for both sessions with def
 	await expect(
 		alice.getByText("Invitation email sent. Expires", { exact: false }),
 	).toBeVisible();
-	await expect(alice.getByLabel("Budget space").locator("option")).toHaveCount(
-		1,
-	);
+	await expect(
+		alice.getByRole("button", { name: "Shared", exact: true }),
+	).toHaveCount(0);
 	await bob.goto(await link());
 	await expect(
 		bob.getByRole("heading", { name: "Shared budget invitation" }),
@@ -110,20 +110,22 @@ test("send, review and accept creates a shared budget for both sessions with def
 			exact: true,
 		}),
 	).toBeVisible();
-	await expect(alice.getByLabel("Budget space").locator("option")).toHaveCount(
-		1,
-	);
+	await expect(
+		alice.getByRole("button", { name: "Shared", exact: true }),
+	).toHaveCount(0);
 	await bob
 		.getByRole("button", { name: "Accept invitation", exact: true })
 		.click();
-	await expect(bob.getByLabel("Budget space").locator("option")).toHaveCount(2);
 	await expect(
-		bob.getByLabel("Budget space").locator("option:checked"),
-	).toHaveText("Shared");
+		bob.getByRole("button", { name: "Shared", exact: true }),
+	).toHaveCount(1);
+	await expect(
+		bob.getByRole("button", { name: "Shared", exact: true }),
+	).toHaveAttribute("aria-pressed", "true");
 	await expect(bob).not.toHaveURL(/invite=/);
-	await expect(alice.getByLabel("Budget space").locator("option")).toHaveCount(
-		2,
-	);
+	await expect(
+		alice.getByRole("button", { name: "Shared", exact: true }),
+	).toHaveCount(1);
 	await bob
 		.getByRole("button", { name: "Monthly budget", exact: true })
 		.click();
@@ -137,7 +139,9 @@ test("send, review and accept creates a shared budget for both sessions with def
 	])
 		await expect(bob.getByLabel(name, { exact: true })).toHaveValue("0.00");
 	await bob.reload();
-	await expect(bob.getByLabel("Budget space").locator("option")).toHaveCount(2);
+	await expect(
+		bob.getByRole("button", { name: "Shared", exact: true }),
+	).toHaveCount(1);
 });
 
 test("resend and cancel invalidate old links and a mismatched account cannot accept", async ({

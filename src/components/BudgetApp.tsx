@@ -88,6 +88,10 @@ function BudgetAppContent({ home }: { home: Home }) {
 		}
 	}, [acceptedSpace, home.spaces]);
 	const space = home.spaces.find((x) => x._id === selected) ?? home.spaces[0];
+	const personalSpace = home.spaces.find(
+		(s) => s.active && s.type === "private",
+	);
+	const sharedSpace = home.spaces.find((s) => s.active && s.type === "shared");
 	useEffect(() => {
 		if (selected !== space._id) setSelected(space._id);
 	}, [selected, space._id]);
@@ -163,23 +167,32 @@ function BudgetAppContent({ home }: { home: Home }) {
 					id={menuId}
 					className={`sidebar-menu${menuOpen ? " is-open" : ""}`}
 				>
-					<label className="space-select">
-						<span className="eyebrow">YOUR SPACE</span>
-						<select
+					{personalSpace && sharedSpace && (
+						<div
+							className="space-toggle"
+							role="group"
 							aria-label="Budget space"
-							value={space._id}
-							onChange={(e) => {
-								setSelected(e.target.value as Id<"spaces">);
-								closeMenu();
-							}}
 						>
-							{home.spaces.map((s) => (
-								<option key={s._id} value={s._id}>
-									{s.name}
-								</option>
+							{(
+								[
+									[personalSpace, "Personal"],
+									[sharedSpace, "Shared"],
+								] as const
+							).map(([budget, title]) => (
+								<button
+									key={budget._id}
+									type="button"
+									aria-pressed={space._id === budget._id}
+									onClick={() => {
+										setSelected(budget._id);
+										closeMenu();
+									}}
+								>
+									{title}
+								</button>
 							))}
-						</select>
-					</label>
+						</div>
+					)}
 					<nav aria-label="Main navigation">
 						{nav.map(([id, name, Icon]) => (
 							<button
