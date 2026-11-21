@@ -1,6 +1,7 @@
 import { useMutation, useQuery } from "convex/react";
 import {
 	ArrowLeftRight,
+	BookOpen,
 	CalendarDays,
 	Landmark,
 	LayoutDashboard,
@@ -228,6 +229,10 @@ function BudgetAppContent({ home }: { home: Home }) {
 							<Settings size={18} />
 							Settings
 						</button>
+						<a className="nav-item" href="/learn">
+							<BookOpen size={18} aria-hidden="true" />
+							Learn
+						</a>
 						<button
 							className="nav-item"
 							type="button"

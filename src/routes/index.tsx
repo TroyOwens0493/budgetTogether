@@ -6,8 +6,15 @@ import { Auth } from "../components/Auth";
 import { BudgetApp } from "../components/BudgetApp";
 import { ValidatedInput } from "../components/ValidatedInput";
 import { labelError, timeZoneError } from "../domain/validation";
+import ConvexProvider from "../integrations/convex/provider";
 import { errorMessage } from "../lib/error-message";
-export const Route = createFileRoute("/")({ component: Home });
+export const Route = createFileRoute("/")({
+	component: () => (
+		<ConvexProvider>
+			<Home />
+		</ConvexProvider>
+	),
+});
 function Home() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
 	if (isLoading)

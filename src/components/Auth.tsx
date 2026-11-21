@@ -200,6 +200,9 @@ export function Auth() {
 						</button>
 					)}
 				</div>
+				<a className="auth-learn" href="/learn">
+					Learn
+				</a>
 			</section>
 		</main>
 	);

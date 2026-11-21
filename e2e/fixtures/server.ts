@@ -12,18 +12,21 @@ import {
 	latestInvitation,
 } from "./backend";
 
+const root = fileURLToPath(new URL("../..", import.meta.url));
+const port = Number(process.env.BUDGET_TASK_PORT ?? 3100);
+
 // Fixture-only values pass configuration checks. No email delivery job is executed.
 process.env.RESEND_API_KEY = "fixture-no-network";
 process.env.RESEND_FROM = "budget@example.test";
-process.env.SITE_URL = "http://127.0.0.1:3100";
+process.env.SITE_URL = `http://127.0.0.1:${port}`;
 
-const root = fileURLToPath(new URL("../..", import.meta.url));
-const port = Number(process.env.BUDGET_TASK_PORT ?? 3100);
 const server = await createServer({
 	configFile: false,
 	envDir: false,
 	root,
-	cacheDir: `${root}/node_modules/.vite-budget-tasks`,
+	cacheDir:
+		process.env.BUDGET_TASK_CACHE_DIR ??
+		`${root}/node_modules/.vite-budget-tasks`,
 	plugins: [
 		tailwindcss(),
 		react(),
