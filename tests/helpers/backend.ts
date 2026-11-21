@@ -13,6 +13,7 @@ import * as bank from "../../convex/bank.ts";
 import * as budgets from "../../convex/budgets.ts";
 import * as classification from "../../convex/classification.ts";
 import * as investments from "../../convex/investments.ts";
+import schema from "../../convex/schema.ts";
 import * as sharing from "../../convex/sharing.ts";
 
 type Reference<T> =
@@ -28,7 +29,7 @@ type Predicate = (row: Row) => boolean;
 export class Memory {
 	rows = new Map<string, Row>();
 	sequence = 0;
-	reads: { table: string; method: string; rows: number }[] = [];
+	reads: { table: string; method: string; rows: number; index?: string }[] = [];
 	forbidCollect = new Set<string>();
 	scheduled: { name: string; args: Record<string, unknown>; delay: number }[] =
 		[];
@@ -56,24 +57,26 @@ export class Memory {
 	query(table: string) {
 		const predicates: Predicate[] = [];
 		let descending = false;
+		let index: string | undefined;
+		let fields: string[] = ["_creationTime", "_id"];
+		const key = (row: Row) => fields.map((field) => row[field]);
+		const compare = (a: unknown[], b: unknown[]) => {
+			for (let i = 0; i < a.length; i++) {
+				if (a[i] === b[i]) continue;
+				return (
+					(typeof a[i] === "number" && typeof b[i] === "number"
+						? Number(a[i]) - Number(b[i])
+						: String(a[i]).localeCompare(String(b[i]))) * (descending ? -1 : 1)
+				);
+			}
+			return 0;
+		};
 		const all = () =>
 			[...this.rows.values()]
 				.filter(
 					(x) => x._id.startsWith(`${table}:`) && predicates.every((p) => p(x)),
 				)
-				.sort((a, b) => {
-					const key =
-						table === "transactions"
-							? "date"
-							: table === "plans"
-								? "month"
-								: "_creationTime";
-					return (
-						(String(a[key]).localeCompare(String(b[key])) ||
-							a._creationTime - b._creationTime ||
-							a._id.localeCompare(b._id)) * (descending ? -1 : 1)
-					);
-				});
+				.sort((a, b) => compare(key(a), key(b)));
 		const range = {
 			eq: (field: string, value: unknown) => {
 				predicates.push((row) => row[field] === value);
@@ -98,11 +101,17 @@ export class Memory {
 		const read = (method: string, rows: Row[]) => {
 			if (method === "collect" && this.forbidCollect.has(table))
 				throw new Error(`Unbounded collect: ${table}`);
-			this.reads.push({ table, method, rows: rows.length });
+			this.reads.push({ table, method, rows: rows.length, index });
 			return rows;
 		};
 		const query = {
-			withIndex: (_index: string, fn: (q: typeof range) => unknown) => {
+			withIndex: (name: string, fn: (q: typeof range) => unknown) => {
+				index = name;
+				const definition = schema.tables[table as keyof typeof schema.tables]
+					?.[" indexes"]()
+					.find((item) => item.indexDescriptor === name);
+				if (!definition) throw new Error(`Missing index: ${table}.${name}`);
+				fields = [...definition.fields, "_creationTime", "_id"];
 				fn(range);
 				return query;
 			},
@@ -136,19 +145,13 @@ export class Memory {
 				maximumRowsRead?: number;
 				maximumBytesRead?: number;
 			}) => {
-				// Model an index-position cursor, including same-date ties. The cursor
+				// Model an index-position cursor, including ties. The cursor
 				// survives deletion of its anchor; it is deliberately not a row offset.
-				const anchor: [string, number, string] | null = opts.cursor
+				const anchor: unknown[] | null = opts.cursor
 					? JSON.parse(opts.cursor)
 					: null;
 				const rows = all().filter(
-					(row) =>
-						!anchor ||
-						(String(row.date).localeCompare(anchor[0]) ||
-							row._creationTime - anchor[1] ||
-							row._id.localeCompare(anchor[2])) *
-							(descending ? -1 : 1) >
-							0,
+					(row) => !anchor || compare(key(row), anchor) > 0,
 				);
 				const page: Row[] = [];
 				let bytes = 0;
@@ -166,7 +169,7 @@ export class Memory {
 					page,
 					isDone: page.length === rows.length,
 					continueCursor: last
-						? JSON.stringify([last.date, last._creationTime, last._id])
+						? JSON.stringify(key(last))
 						: (opts.cursor ?? ""),
 				};
 			},

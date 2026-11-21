@@ -282,6 +282,7 @@ export default defineSchema({
 		reconciledWith: v.optional(v.id("transactions")),
 	})
 		.index("by_space_date", ["spaceId", "date"])
+		.index("by_space_account_date", ["spaceId", "accountId", "date"])
 		.index("by_space_funded_date", ["spaceId", "funded", "date"])
 		.index("by_classification", [
 			"source",

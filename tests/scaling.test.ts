@@ -1,19 +1,58 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Id } from "../convex/_generated/dataModel";
+import * as accounts from "../convex/accounts.ts";
 import * as bank from "../convex/bank.ts";
 import { SYNC_BATCH_SIZE } from "../convex/bankTypes.ts";
 import * as budgets from "../convex/budgets.ts";
 import { encrypt, type PlaidTransaction } from "../convex/plaidClient.ts";
 import { validateSplits } from "../src/domain/budget.ts";
 import {
+	connectedAccount,
 	drainSync,
 	entry,
 	fixture,
 	id,
 	invoke,
 	type Memory,
+	sharedBudget,
 } from "./helpers/backend.ts";
+
+test("account labels probe only moved accounts and require actual history", async () => {
+	const { db, privateId, accountId } = await fixture();
+	const sharedId = await sharedBudget(db);
+	const moved = await connectedAccount(db, privateId, "Moved");
+	const unused = await connectedAccount(db, privateId, "Unused");
+	for (let i = 0; i < 240; i++)
+		await entry(db, privateId, i % 2 ? moved : accountId, 100, "transfer");
+	for (const id of [moved, unused])
+		await invoke(accounts.move, db, {
+			id,
+			destinationId: sharedId,
+			revision: 0,
+		});
+	// Historical labels also work for accounts predating assignment tracking.
+	await db.patch(moved, { assignments: undefined });
+	db.forbidCollect.add("transactions");
+	db.reads = [];
+	const labels = await invoke(accounts.list, db, { spaceId: privateId });
+	assert.deepEqual(
+		labels.map((x) => [x._id, x.active, x.canMove]),
+		[
+			[accountId, true, true],
+			[moved, false, false],
+		],
+	);
+	assert.deepEqual(
+		db.reads
+			.filter((x) => x.table === "transactions")
+			.map((x) => [x.index, x.method, x.rows]),
+		[
+			["by_space_account_date", "first", 1],
+			["by_space_account_date", "first", 0],
+		],
+	);
+});
 
 const tx = (
 	transaction_id: string,
