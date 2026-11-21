@@ -12,6 +12,11 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { access } from "../access";
 import { funding, results } from "./accounting";
+import {
+	resolveCategories,
+	resolveLimits,
+	validateCategory,
+} from "./categories";
 import { summary as fundSummary, sameAllocations } from "./funds";
 import { saveWithPlan, sharedForPersonal } from "./personalFunding";
 import { planState } from "./reporting";
@@ -53,9 +58,12 @@ export async function save(
 			throw new ConvexError(
 				"Set fund amounts in Funds, not in spending limits.",
 			);
-		const category = await ctx.db.get(limit.categoryId);
-		if (category?.spaceId !== args.spaceId)
-			throw new ConvexError("Every category must belong to this budget.");
+		await validateCategory(
+			ctx,
+			args.spaceId,
+			limit.categoryId,
+			"Every category must belong to this budget.",
+		);
 	}
 	if (args.personalFunding) {
 		if (space.type !== "shared")
@@ -146,7 +154,7 @@ export async function repeat(ctx: MutationCtx, args: MonthArgs) {
 			? 0
 			: old.expectedIncome,
 		savingsTarget: old.savingsTarget,
-		limits: old.limits,
+		limits: await resolveLimits(ctx, old.limits),
 		saved: false,
 		reviewed: false,
 		revision: 1,
@@ -178,6 +186,8 @@ export async function review(
 			"Save this month’s budget before completing its review.",
 		);
 	assertRevision(plan.revision, args.revision);
+	for (const x of args.allocations)
+		if (x.categoryId) await validateCategory(ctx, args.spaceId, x.categoryId);
 	const result = await results(ctx, args.spaceId, args.month);
 	if (!sameAllocations(plan.fundAllocations, result.fundPlan.allocations))
 		throw new ConvexError(
@@ -197,12 +207,6 @@ export async function review(
 		throw new ConvexError(
 			"Carry-forward exceeds this month’s savings above target.",
 		);
-	for (const x of args.allocations)
-		if (
-			x.categoryId &&
-			(await ctx.db.get(x.categoryId))?.spaceId !== args.spaceId
-		)
-			throw new ConvexError("Choose categories from this budget.");
 	const destinationMonth = nextMonth(args.month);
 	const destination = await ctx.db
 		.query("plans")
@@ -224,9 +228,12 @@ export async function review(
 	};
 	let savingsTarget = base.savingsTarget;
 	const limits = new Map<Id<"categories">, number>(
-		base.limits.map((x) => [x.categoryId, x.amount]),
+		(await resolveLimits(ctx, base.limits)).map((x) => [
+			x.categoryId,
+			x.amount,
+		]),
 	);
-	for (const x of previous) {
+	for (const x of await resolveCategories(ctx, previous)) {
 		if (x.categoryId)
 			limits.set(x.categoryId, (limits.get(x.categoryId) ?? 0) - x.amount);
 		else savingsTarget -= x.amount;
@@ -298,7 +305,7 @@ export async function ensure(ctx: MutationCtx, args: MonthArgs) {
 			? 0
 			: previous.expectedIncome,
 		savingsTarget: previous.savingsTarget,
-		limits: previous.limits,
+		limits: await resolveLimits(ctx, previous.limits),
 		saved: false,
 		reviewed: false,
 		revision: 1,

@@ -60,30 +60,33 @@ export async function internalSummary(
 				month: row.month,
 			})),
 	);
+	// Bank corrections can move linked payments before a fund's start month.
+	// Include every posted payment through the selected month to keep balances exact.
 	const transactions = await ctx.db
 		.query("transactions")
-		.withIndex("by_space_funded_date", (q) =>
+		.withIndex("by_space_funded_posted_date", (q) =>
 			q
 				.eq("spaceId", args.spaceId)
 				.eq("funded", true)
+				.eq("kind", "purchase")
+				.eq("pending", false)
+				.eq("removed", false)
 				.lt("date", `${nextMonth(args.month)}-01`),
 		)
 		.collect();
-	const payments: FundPayment[] = transactions
-		.filter((row) => !row.removed && !row.pending && row.kind === "purchase")
-		.flatMap((row) =>
-			row.splits.flatMap((split) =>
-				split.fundId
-					? [
-							{
-								fundId: split.fundId,
-								month: row.date.slice(0, 7),
-								amount: split.amount,
-							},
-						]
-					: [],
-			),
-		);
+	const payments: FundPayment[] = transactions.flatMap((row) =>
+		row.splits.flatMap((split) =>
+			split.fundId
+				? [
+						{
+							fundId: split.fundId,
+							month: row.date.slice(0, 7),
+							amount: split.amount,
+						},
+					]
+				: [],
+		),
+	);
 	const items = funds
 		.flatMap((fund) => {
 			const row = fundForMonth(fund, args.month, contributions, payments);

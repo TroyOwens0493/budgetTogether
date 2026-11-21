@@ -168,11 +168,7 @@ function BudgetAppContent({ home }: { home: Home }) {
 					className={`sidebar-menu${menuOpen ? " is-open" : ""}`}
 				>
 					{personalSpace && sharedSpace && (
-						<div
-							className="space-toggle"
-							role="group"
-							aria-label="Budget space"
-						>
+						<fieldset className="space-toggle" aria-label="Budget space">
 							{(
 								[
 									[personalSpace, "Personal"],
@@ -191,7 +187,7 @@ function BudgetAppContent({ home }: { home: Home }) {
 									{title}
 								</button>
 							))}
-						</div>
+						</fieldset>
 					)}
 					<nav aria-label="Main navigation">
 						{nav.map(([id, name, Icon]) => (

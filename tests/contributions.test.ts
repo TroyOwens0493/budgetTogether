@@ -48,6 +48,14 @@ class Memory {
 				predicates.push((row) => row[field] === value);
 				return range;
 			},
+			gte: (field: string, value: string) => {
+				predicates.push((row) => String(row[field]) >= value);
+				return range;
+			},
+			lt: (field: string, value: string) => {
+				predicates.push((row) => String(row[field]) < value);
+				return range;
+			},
 		};
 		const query = {
 			withIndex: (_name: string, fn: (q: typeof range) => unknown) => {

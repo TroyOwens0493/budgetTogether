@@ -3,6 +3,7 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { PlaidTransaction } from "../plaidClient";
+import { resolveCategories } from "./categories";
 
 async function ignored(
 	ctx: MutationCtx,
@@ -115,12 +116,16 @@ export async function applyChanges(
 			await forgetImport(ctx, identifiers);
 			continue;
 		}
+		// The merge rewrites splits kept on the same row. Map only splits
+		// copied from another row, which the merge may have already scanned.
+		const copied = prior && prior._id !== (old ?? pending)?._id;
 		const splits =
-			kind !== "purchase"
-				? []
-				: prior?.splits.length
-					? resizeSplits(prior.splits, amount)
-					: [];
+			kind === "purchase" && prior?.splits.length
+				? resizeSplits(
+						copied ? await resolveCategories(ctx, prior.splits) : prior.splits,
+						amount,
+					)
+				: [];
 		const needsClassification =
 			!prior?.edited &&
 			(!prior?.classificationStatus ||

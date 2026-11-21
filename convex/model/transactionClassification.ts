@@ -120,7 +120,12 @@ export async function complete(
 		suggestedKind: result.kind,
 		splits:
 			result.kind === "purchase" && category
-				? [{ categoryId: category._id, amount: row.amount }]
+				? [
+						{
+							categoryId: category.mergingInto ?? category._id,
+							amount: row.amount,
+						},
+					]
 				: [],
 		classificationStatus: needsReview ? "review" : "classified",
 		classificationRetryAt: undefined,

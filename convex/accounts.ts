@@ -7,26 +7,45 @@ import { access, label, user } from "./access";
 export const list = query({
 	args: { spaceId: v.id("spaces") },
 	handler: async (ctx, args) => {
-		await access(ctx, args.spaceId);
+		const { current, space } = await access(ctx, args.spaceId);
 		const accounts = await ctx.db
 			.query("accounts")
 			.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
 			.collect();
-		// Include an account label for historical records without exposing its current private assignment.
-		const entries = await ctx.db
-			.query("transactions")
-			.withIndex("by_space_date", (q) => q.eq("spaceId", args.spaceId))
-			.collect();
-		const ids = new Set(accounts.map((x) => x._id));
-		for (const entry of entries)
-			if (!ids.has(entry.accountId)) {
-				const a = await ctx.db.get(entry.accountId);
-				if (a) {
-					accounts.push(a);
-					ids.add(a._id);
-				}
+		// Only an account owner can move it into a budget they belong to. Include
+		// former members for historical labels, and require an actual transaction.
+		const owners =
+			space.type === "private"
+				? [space.ownerId]
+				: (
+						await ctx.db
+							.query("memberships")
+							.withIndex("by_space", (q) => q.eq("spaceId", space._id))
+							.collect()
+					).map((member) => member.userId);
+		const historical = [];
+		for (const owner of new Set(owners)) {
+			const owned = await ctx.db
+				.query("accounts")
+				.withIndex("by_user", (q) => q.eq("userId", owner))
+				.collect();
+			for (const account of owned) {
+				if (account.spaceId === space._id) continue;
+				const first = await ctx.db
+					.query("transactions")
+					.withIndex("by_space_account_date", (q) =>
+						q.eq("spaceId", space._id).eq("accountId", account._id),
+					)
+					.first();
+				if (first) historical.push({ account, first });
 			}
-		const current = await user(ctx);
+		}
+		historical.sort(
+			(a, b) =>
+				a.first.date.localeCompare(b.first.date) ||
+				a.first._creationTime - b.first._creationTime,
+		);
+		accounts.push(...historical.map(({ account }) => account));
 		return accounts.map((a) => ({
 			_id: a._id,
 			name: a.name,

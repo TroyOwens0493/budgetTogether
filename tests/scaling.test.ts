@@ -1,19 +1,599 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import type { Id } from "../convex/_generated/dataModel";
+import * as accounts from "../convex/accounts.ts";
 import * as bank from "../convex/bank.ts";
 import { SYNC_BATCH_SIZE } from "../convex/bankTypes.ts";
 import * as budgets from "../convex/budgets.ts";
+import * as contributions from "../convex/contributions.ts";
 import { encrypt, type PlaidTransaction } from "../convex/plaidClient.ts";
 import { validateSplits } from "../src/domain/budget.ts";
 import {
+	connectedAccount,
+	drainCategoryBatches,
 	drainSync,
 	entry,
 	fixture,
 	id,
 	invoke,
 	type Memory,
+	runCategoryBatch,
+	sharedBudget,
 } from "./helpers/backend.ts";
+
+test("account labels probe only moved accounts and require actual history", async () => {
+	const { db, privateId, accountId } = await fixture();
+	const sharedId = await sharedBudget(db);
+	const moved = await connectedAccount(db, privateId, "Moved");
+	const unused = await connectedAccount(db, privateId, "Unused");
+	for (let i = 0; i < 240; i++)
+		await entry(db, privateId, i % 2 ? moved : accountId, 100, "transfer");
+	for (const id of [moved, unused])
+		await invoke(accounts.move, db, {
+			id,
+			destinationId: sharedId,
+			revision: 0,
+		});
+	// Historical labels also work for accounts predating assignment tracking.
+	await db.patch(moved, { assignments: undefined });
+	db.forbidCollect.add("transactions");
+	db.reads = [];
+	const labels = await invoke(accounts.list, db, { spaceId: privateId });
+	assert.deepEqual(
+		labels.map((x) => [x._id, x.active, x.canMove]),
+		[
+			[accountId, true, true],
+			[moved, false, false],
+		],
+	);
+	assert.deepEqual(
+		db.reads
+			.filter((x) => x.table === "transactions")
+			.map((x) => [x.index, x.method, x.rows]),
+		[
+			["by_space_account_date", "first", 1],
+			["by_space_account_date", "first", 0],
+		],
+	);
+});
+
+test("recurring detection reads recent history and retains active suggestions and status", async (t) => {
+	t.mock.timers.enable({
+		apis: ["Date"],
+		now: new Date("2026-09-30T12:00:00Z"),
+	});
+	const { db, privateId, accountId, categoryId } = await fixture();
+	for (const [description, dates] of [
+		["Active", ["2024-01-01", "2026-06-18", "2026-07-23", "2026-08-27"]],
+		["Inactive", ["2025-01-01", "2025-02-01", "2025-03-01"]],
+	] as const)
+		for (const date of dates) {
+			const id = await entry(
+				db,
+				privateId,
+				accountId,
+				1000,
+				"purchase",
+				categoryId,
+				date,
+			);
+			await db.patch(id, { description });
+		}
+	await invoke(budgets.setRecurring, db, {
+		spaceId: privateId,
+		merchant: "active",
+		status: "confirmed",
+	});
+	db.reads = [];
+	assert.deepEqual(
+		await invoke(budgets.recurring, db, { spaceId: privateId }),
+		[
+			{
+				merchant: "active",
+				amount: 1000,
+				date: "2026-09-27",
+				status: "confirmed",
+			},
+		],
+	);
+	assert.deepEqual(
+		db.reads.filter((x) => x.table === "transactions").map((x) => x.rows),
+		[3],
+	);
+});
+
+test("legacy contribution suggestions only read the selected month in both budgets", async () => {
+	const { db, privateId, accountId } = await fixture();
+	const sharedId = await sharedBudget(db);
+	const membership = [...db.rows.values()].find(
+		(x) => x.spaceId === sharedId && x.userId === "alice",
+	);
+	assert.ok(membership);
+	await db.patch(membership._id, {
+		joinedAt: Date.parse("2026-10-01T12:00:00Z"),
+	});
+	const sharedAccount = await connectedAccount(db, sharedId);
+	for (const date of ["2024-09-01", "2026-08-31", "2026-10-01"]) {
+		await entry(db, privateId, accountId, 1000, "transfer", undefined, date);
+		await entry(
+			db,
+			sharedId,
+			sharedAccount,
+			-1000,
+			"transfer",
+			undefined,
+			date,
+		);
+	}
+	const outId = await entry(
+		db,
+		privateId,
+		accountId,
+		1000,
+		"transfer",
+		undefined,
+		"2026-09-01",
+	);
+	const inId = await entry(
+		db,
+		sharedId,
+		sharedAccount,
+		-1000,
+		"transfer",
+		undefined,
+		"2026-09-02",
+	);
+	db.reads = [];
+	const result = await invoke(contributions.list, db, {
+		privateId,
+		sharedId,
+		month: "2026-09",
+	});
+	assert.deepEqual(
+		result.suggestions.map((x) => [x.outId, x.inId]),
+		[[outId, inId]],
+	);
+	assert.deepEqual(
+		db.reads.filter((x) => x.table === "transactions").map((x) => x.rows),
+		[1, 1],
+	);
+});
+
+test("shared monthly results read private income without scanning private spending", async () => {
+	const { db, privateId, accountId, categoryId } = await fixture();
+	const sharedId = await sharedBudget(db);
+	const membership = [...db.rows.values()].find(
+		(x) => x.spaceId === sharedId && x.userId === "alice",
+	);
+	assert.ok(membership);
+	await db.patch(membership._id, {
+		joinedAt: Date.parse("2026-09-01T12:00:00Z"),
+	});
+	const sharedAccount = await connectedAccount(db, sharedId);
+	await entry(db, sharedId, sharedAccount, 500, "purchase");
+	await entry(db, privateId, accountId, -1000, "income");
+	const pending = await entry(db, privateId, accountId, -500, "income");
+	await db.patch(pending, { pending: true });
+	await entry(
+		db,
+		privateId,
+		accountId,
+		-3000,
+		"income",
+		undefined,
+		"2026-08-31",
+	);
+	for (let i = 0; i < 120; i++)
+		await entry(db, privateId, accountId, 600, "purchase", categoryId);
+	db.reads = [];
+	const result = await invoke(budgets.dashboard, db, {
+		spaceId: sharedId,
+		month: "2026-09",
+	});
+	assert.equal(result.income, 1000);
+	assert.equal(result.savings, 500);
+	assert.equal(result.entries.length, 1);
+	assert.deepEqual(
+		db.reads
+			.filter((x) => x.table === "transactions")
+			.map((x) => [x.index, x.rows]),
+		[
+			["by_space_date", 1],
+			["by_space_kind_date", 2],
+		],
+	);
+});
+
+test("fund balances skip nonposted rows and retain backdated bank corrections", async () => {
+	const { db, privateId, accountId, categoryId } = await fixture();
+	const fundId = await invoke(budgets.saveFund, db, {
+		spaceId: privateId,
+		startMonth: "2026-08",
+		effectiveMonth: "2026-08",
+		openingBalance: 10000,
+		name: "Insurance",
+		targetAmount: 10000,
+		targetMonth: "2027-01",
+		revision: 0,
+	});
+	for (const [date, amount, pending, removed] of [
+		["2026-07-30", 2000, false, false],
+		["2026-09-01", -500, false, false],
+		["2026-09-02", 1000, true, false],
+		["2026-09-03", 1000, false, true],
+		["2026-10-01", 1000, false, false],
+	] as const) {
+		const id = await entry(
+			db,
+			privateId,
+			accountId,
+			amount,
+			"purchase",
+			categoryId,
+			date,
+		);
+		await db.patch(id, {
+			source: "plaid",
+			funded: true,
+			pending,
+			removed,
+			splits: [{ categoryId, fundId, amount }],
+		});
+	}
+	db.reads = [];
+	const result = await invoke(budgets.funds, db, {
+		spaceId: privateId,
+		month: "2026-09",
+	});
+	assert.equal(result.items[0].balanceBeforeMonth, 8000);
+	assert.equal(result.items[0].balance, 8500);
+	assert.deepEqual(
+		db.reads
+			.filter((x) => x.table === "transactions")
+			.map((x) => [x.index, x.rows]),
+		[["by_space_funded_posted_date", 2]],
+	);
+});
+
+test("category deletion rewrites one bounded batch at a time, including newly appended transactions", async () => {
+	const { db, privateId, categoryId, accountId } = await fixture();
+	const categories = await invoke(budgets.categories, db, {
+		spaceId: privateId,
+	});
+	const replacementId = categories.find((row) => row.name === "Other")?._id;
+	assert.ok(replacementId);
+	const limits = [
+		{ categoryId, amount: 300 },
+		{ categoryId: replacementId, amount: 100 },
+	];
+	const plan = {
+		spaceId: privateId,
+		expectedIncome: 400,
+		savingsTarget: 0,
+		saved: true,
+		reviewed: false,
+		revision: 4,
+	};
+	const oldPlan = await db.insert("plans", {
+		...plan,
+		month: "2026-09",
+		limits,
+	});
+	await db.insert("plans", { ...plan, month: "2026-06", limits });
+	const unaffected = await db.insert("plans", {
+		...plan,
+		month: "2026-08",
+		limits: [{ categoryId: replacementId, amount: 400 }],
+	});
+	for (let i = 0; i < 130; i++) {
+		await db.insert("plans", {
+			...plan,
+			month: `${2027 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}`,
+			limits,
+		});
+	}
+	const carries = [];
+	for (let i = 0; i < 107; i++)
+		carries.push(
+			await db.insert("carry", {
+				spaceId: privateId,
+				sourceMonth: "2025-08",
+				destinationMonth: "2025-09",
+				categoryId,
+				amount: i,
+			}),
+		);
+	const entries = [];
+	const oldEntry = await entry(
+		db,
+		privateId,
+		accountId,
+		400,
+		"purchase",
+		categoryId,
+		"2026-08-01",
+	);
+	const fundId = await db.insert("funds", {
+		spaceId: privateId,
+		startMonth: "2026-08",
+		openingBalance: 0,
+		schedules: [],
+		revision: 0,
+	});
+	await db.patch(oldEntry, { splits: [{ ...limits[0], fundId }, limits[1]] });
+	for (let i = 0; i < 230; i++)
+		entries.push(
+			await entry(db, privateId, accountId, 100, "purchase", categoryId),
+		);
+	const unchangedEntry = await entry(
+		db,
+		privateId,
+		accountId,
+		100,
+		"purchase",
+		replacementId,
+	);
+
+	const tables = new Set(["plans", "carry", "transactions"]);
+	db.forbidCollect = tables;
+	const assertBatch = (table: string, index: string) => {
+		const reads = db.reads.filter((read) => tables.has(read.table));
+		assert.equal(reads.length, 1);
+		assert.equal(reads[0].table, table);
+		assert.equal(reads[0].index, index);
+		assert.equal(reads[0].method, "paginate");
+		assert.ok(reads[0].rows <= 100);
+	};
+	db.reads = [];
+	await invoke(budgets.deleteCategory, db, {
+		id: categoryId,
+		replacementId,
+		revision: 0,
+	});
+	assertBatch("plans", "by_space");
+	assert.equal((await db.get(oldPlan))?.revision, 4);
+	assert.ok(
+		(await invoke(budgets.categories, db, { spaceId: privateId })).some(
+			(row) => row._id === categoryId,
+		),
+	);
+	const {
+		rows: [visible],
+	} = await invoke(budgets.transactions, db, {
+		spaceId: privateId,
+		month: "2026-08",
+	});
+	assert.equal(visible.splits[0].categoryId, categoryId);
+	assert.equal(visible.revision, 0);
+
+	const deleting = /This category is being deleted/;
+	await assert.rejects(
+		invoke(budgets.saveCategory, db, {
+			spaceId: privateId,
+			id: categoryId,
+			name: "New name",
+			color: "#123456",
+			revision: 0,
+		}),
+		deleting,
+	);
+	await assert.rejects(
+		invoke(budgets.saveTransaction, db, {
+			spaceId: privateId,
+			accountId,
+			description: "New entry",
+			amount: 400,
+			kind: "purchase",
+			date: "2026-09-01",
+			pending: false,
+			note: "",
+			splits: limits,
+			revision: 0,
+		}),
+		deleting,
+	);
+	await assert.rejects(
+		invoke(budgets.savePlan, db, {
+			spaceId: privateId,
+			month: "2026-09",
+			expectedIncome: 400,
+			savingsTarget: 0,
+			limits,
+			revision: 4,
+		}),
+		deleting,
+	);
+	await assert.rejects(
+		invoke(budgets.review, db, {
+			spaceId: privateId,
+			month: "2026-09",
+			allocations: [limits[0]],
+			revision: 4,
+		}),
+		deleting,
+	);
+	await invoke(budgets.repeatPlan, db, {
+		spaceId: privateId,
+		month: "2026-06",
+	});
+	await invoke(budgets.ensureMonth, db, {
+		spaceId: privateId,
+		month: "2026-10",
+	});
+	const copiedPlans = [...db.rows.values()].filter(
+		(row) =>
+			row.spaceId === privateId &&
+			["2026-10", "2026-07"].includes(String(row.month)),
+	);
+	assert.equal(copiedPlans.length, 2);
+	for (const copied of copiedPlans)
+		assert.deepEqual(copied.limits, [
+			{ categoryId: replacementId, amount: 400 },
+		]);
+
+	for (const [phase, index] of [
+		["plans", "by_space"],
+		["carry", "by_source"],
+		["carry", "by_source"],
+		["transactions", "by_space"],
+	]) {
+		db.reads = [];
+		assert.equal(await runCategoryBatch(db), phase);
+		assertBatch(phase, index);
+	}
+	await assert.rejects(
+		invoke(budgets.deleteTransaction, db, {
+			id: oldEntry,
+			revision: visible.revision,
+		}),
+		/This record changed/,
+	);
+	// Seed a backdated row after advancing the transaction cursor to exercise the scan itself.
+	entries.push(
+		await entry(
+			db,
+			privateId,
+			accountId,
+			100,
+			"purchase",
+			categoryId,
+			"2000-01-01",
+		),
+	);
+	for (let i = 0; i < 2; i++) {
+		db.reads = [];
+		assert.equal(await runCategoryBatch(db), "transactions");
+		assertBatch("transactions", "by_space");
+	}
+	assert.equal(db.scheduled.length, 0);
+	assert.equal(await db.get(categoryId), null);
+	for (const id of entries) {
+		assert.deepEqual((await db.get(id))?.splits, [
+			{ categoryId: replacementId, amount: 100 },
+		]);
+		assert.equal((await db.get(id))?.revision, 1);
+	}
+	assert.deepEqual((await db.get(oldEntry))?.splits, [
+		{ categoryId: replacementId, amount: 300, fundId },
+		{ categoryId: replacementId, amount: 100 },
+	]);
+	assert.equal((await db.get(oldEntry))?.revision, 1);
+	assert.equal((await db.get(unchangedEntry))?.revision, 0);
+	assert.equal((await db.get(unaffected))?.revision, 5);
+	assert.equal((await db.get(oldPlan))?.revision, 5);
+	assert.deepEqual((await db.get(oldPlan))?.limits, [
+		{ categoryId: replacementId, amount: 400 },
+	]);
+	for (const copied of copiedPlans)
+		assert.equal((await db.get(copied._id))?.revision, 1);
+	for (const [amount, id] of carries.entries()) {
+		const carry = await db.get(id);
+		assert.equal(carry?.categoryId, replacementId);
+		assert.equal(carry?.amount, amount);
+	}
+});
+
+test("unrelated category deletions can overlap while their sources and targets are protected", async () => {
+	const { db, privateId, accountId } = await fixture();
+	const [first, firstTarget, second, secondTarget] = await invoke(
+		budgets.categories,
+		db,
+		{
+			spaceId: privateId,
+		},
+	);
+	const firstEntry = await entry(
+		db,
+		privateId,
+		accountId,
+		100,
+		"purchase",
+		first._id,
+	);
+	const secondEntry = await entry(
+		db,
+		privateId,
+		accountId,
+		200,
+		"purchase",
+		second._id,
+	);
+	const remove = (id: Id<"categories">, replacementId: Id<"categories">) =>
+		invoke(budgets.deleteCategory, db, { id, replacementId, revision: 0 });
+	await remove(first._id, firstTarget._id);
+	await assert.rejects(
+		remove(first._id, secondTarget._id),
+		/This category is being deleted/,
+	);
+	await assert.rejects(
+		remove(second._id, first._id),
+		/This category is being deleted/,
+	);
+	await assert.rejects(
+		remove(firstTarget._id, secondTarget._id),
+		/Wait for the other category deletion/,
+	);
+	await remove(second._id, secondTarget._id);
+	assert.equal((await db.get(first._id))?.mergingInto, firstTarget._id);
+	assert.equal((await db.get(second._id))?.mergingInto, secondTarget._id);
+	await drainCategoryBatches(db);
+	assert.equal(await db.get(first._id), null);
+	assert.equal(await db.get(second._id), null);
+	assert.deepEqual((await db.get(firstEntry))?.splits, [
+		{ categoryId: firstTarget._id, amount: 100 },
+	]);
+	assert.deepEqual((await db.get(secondEntry))?.splits, [
+		{ categoryId: secondTarget._id, amount: 200 },
+	]);
+});
+
+test("plan review subtracts unprocessed carry from the already merged destination limits", async () => {
+	const { db, privateId, categoryId } = await fixture();
+	const [replacement] = await invoke(budgets.categories, db, {
+		spaceId: privateId,
+	});
+	const plan = {
+		spaceId: privateId,
+		expectedIncome: 0,
+		savingsTarget: 0,
+		saved: true,
+		reviewed: false,
+		revision: 1,
+	};
+	await db.insert("plans", { ...plan, month: "2026-08", limits: [] });
+	const next = await db.insert("plans", {
+		...plan,
+		month: "2026-09",
+		limits: [
+			{ categoryId, amount: 200 },
+			{ categoryId: replacement._id, amount: 100 },
+		],
+	});
+	const carry = await db.insert("carry", {
+		spaceId: privateId,
+		sourceMonth: "2026-08",
+		destinationMonth: "2026-09",
+		categoryId,
+		amount: 200,
+	});
+	await invoke(budgets.deleteCategory, db, {
+		id: categoryId,
+		replacementId: replacement._id,
+		revision: 0,
+	});
+	assert.equal((await db.get(carry))?.categoryId, categoryId);
+	await invoke(budgets.review, db, {
+		spaceId: privateId,
+		month: "2026-08",
+		allocations: [],
+		revision: 2,
+	});
+	assert.deepEqual((await db.get(next))?.limits, [
+		{ categoryId: replacement._id, amount: 100 },
+	]);
+	assert.equal(await db.get(carry), null);
+	await drainCategoryBatches(db);
+});
 
 const tx = (
 	transaction_id: string,
@@ -80,6 +660,114 @@ async function applyAll(db: Memory, runId: Id<"bankSyncRuns">) {
 	}
 	throw new Error("Import did not finish");
 }
+
+test("reconciliation and bank sync resolve categories when copying into scanned transactions", async () => {
+	const { db, privateId, accountId, categoryId, connectionId } =
+		await bankFixture();
+	const replacement = [...db.rows.values()].find((row) => row.name === "Other");
+	assert.ok(replacement);
+	const replacementId = id<"categories">(replacement._id);
+	const reconciled = await entry(db, privateId, accountId, 100, "transfer");
+	const posted = await entry(db, privateId, accountId, 200, "transfer");
+	await db.patch(reconciled, { source: "plaid" });
+	await db.patch(posted, { source: "plaid", externalId: "posted" });
+	for (let i = 0; i < 98; i++)
+		await entry(db, privateId, accountId, 100, "transfer");
+	const manualId = await entry(
+		db,
+		privateId,
+		accountId,
+		100,
+		"purchase",
+		categoryId,
+	);
+	const pending = await entry(
+		db,
+		privateId,
+		accountId,
+		200,
+		"purchase",
+		categoryId,
+	);
+	await db.patch(pending, {
+		source: "plaid",
+		externalId: "pending",
+		pending: true,
+		edited: true,
+	});
+	db.forbidCollect.delete("categories");
+	await invoke(budgets.deleteCategory, db, {
+		id: categoryId,
+		replacementId,
+		revision: 0,
+	});
+	db.forbidCollect.add("categories");
+	assert.equal(await runCategoryBatch(db), "carry");
+	assert.equal(await runCategoryBatch(db), "transactions");
+	assert.equal((await db.get(pending))?.revision, 0);
+	await invoke(budgets.reconcile, db, {
+		manualId,
+		importId: reconciled,
+		revision: 0,
+	});
+	await invoke(bank.apply, db, {
+		id: connectionId,
+		cursor: "next",
+		changed: [tx("posted", { pending_transaction_id: "pending", amount: 2 })],
+		removed: [],
+	});
+	for (const [transaction, amount] of [
+		[reconciled, 100],
+		[posted, 200],
+	] as const)
+		assert.deepEqual((await db.get(transaction))?.splits, [
+			{ categoryId: replacementId, amount },
+		]);
+	await drainCategoryBatches(db);
+	assert.equal(await db.get(categoryId), null);
+	for (const transaction of [reconciled, posted])
+		assert.equal((await db.get(transaction))?.revision, 1);
+});
+
+test("bank corrections leave same-row splits for the category merge to rewrite", async () => {
+	const { db, privateId, accountId, categoryId, connectionId } =
+		await bankFixture();
+	const replacement = [...db.rows.values()].find((row) => row.name === "Other");
+	assert.ok(replacement);
+	const replacementId = id<"categories">(replacement._id);
+	const imported = await entry(
+		db,
+		privateId,
+		accountId,
+		200,
+		"purchase",
+		categoryId,
+	);
+	await db.patch(imported, { source: "plaid", externalId: "same" });
+	db.forbidCollect.delete("categories");
+	await invoke(budgets.deleteCategory, db, {
+		id: categoryId,
+		replacementId,
+		revision: 0,
+	});
+	db.forbidCollect.add("categories");
+	// Run carry only; the transactions batch has not scanned this row yet.
+	assert.equal(await runCategoryBatch(db), "carry");
+	await invoke(bank.apply, db, {
+		id: connectionId,
+		cursor: "next",
+		changed: [tx("same", { amount: 3 })],
+		removed: [],
+	});
+	assert.deepEqual((await db.get(imported))?.splits, [
+		{ categoryId, amount: 300 },
+	]);
+	await drainCategoryBatches(db);
+	assert.equal(await db.get(categoryId), null);
+	const row = await db.get(imported);
+	assert.deepEqual(row?.splits, [{ categoryId: replacementId, amount: 300 }]);
+	assert.equal(row?.revision, 2);
+});
 
 test("transaction queries bound sparse filtering and can continue through empty pages", async () => {
 	const { db, privateId, accountId, categoryId } = await fixture();
