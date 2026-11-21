@@ -317,6 +317,7 @@ export function ProjectionsView({
 									<div>
 										<strong>{holding.name}</strong>
 										{holding.history?.error &&
+											["stock", "etf", "mutualFund"].includes(holding.type) &&
 											holding.annualReturnOverride === undefined &&
 											holdingReturn(holding) !== undefined && (
 												<small className="over">{holding.history.error}</small>
