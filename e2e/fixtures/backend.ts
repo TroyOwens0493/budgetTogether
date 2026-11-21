@@ -35,6 +35,7 @@ const handlers = new Map<string, unknown>([
 	["budgets:categories", budgets.categories],
 	["budgets:saveCategory", budgets.saveCategory],
 	["budgets:deleteCategory", budgets.deleteCategory],
+	["budgets:continueCategoryReplacement", budgets.continueCategoryReplacement],
 	["budgets:saveTransaction", budgets.saveTransaction],
 	["accounts:list", accounts.list],
 	["accounts:connections", accounts.connections],
@@ -93,6 +94,7 @@ class Scenario {
 			reference: Parameters<typeof getFunctionName>[0],
 			args: unknown,
 		) => this.execute(actor, getFunctionName(reference), args);
+		const continuations: { operation: string; args: unknown }[] = [];
 		const ctx = {
 			db: this.db,
 			runQuery: call,
@@ -105,6 +107,10 @@ class Scenario {
 				) => {
 					const operation = getFunctionName(reference);
 					if (operation === "investments:fetchReturn") return;
+					if (operation === "budgets:continueCategoryReplacement") {
+						continuations.push({ operation, args });
+						return;
+					}
 					// Capture the simulated email; never run its external delivery action.
 					if (operation === "sharing:send") {
 						this.outbox.push(args as { token: string });
@@ -118,7 +124,10 @@ class Scenario {
 		const backup = structuredClone(this.db.rows);
 		const outbox = [...this.outbox];
 		try {
-			return structuredClone(await handler._handler(ctx, args));
+			const result = structuredClone(await handler._handler(ctx, args));
+			for (const job of continuations)
+				await this.execute(actor, job.operation, job.args);
+			return result;
 		} catch (error) {
 			if (!handler.isAction) {
 				this.db.rows = backup;

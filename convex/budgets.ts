@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import type { Doc } from "./_generated/dataModel";
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import * as categoriesModel from "./model/categories";
 import * as fundsModel from "./model/funds";
 import * as insightsModel from "./model/insights";
@@ -46,6 +46,11 @@ export const deleteCategory = mutation({
 		revision: v.number(),
 	},
 	handler: categoriesModel.remove,
+});
+
+export const continueCategoryReplacement = internalMutation({
+	args: { id: v.id("categoryReplacements"), step: v.number() },
+	handler: categoriesModel.continueReplacement,
 });
 
 export const dashboard = query({

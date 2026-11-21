@@ -8,6 +8,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { access } from "../access";
 import { results } from "./accounting";
+import { replaceLimits } from "./categories";
 
 export async function recurring(
 	ctx: QueryCtx,
@@ -58,7 +59,7 @@ export async function alerts(
 	ctx: QueryCtx,
 	args: { spaceId: Id<"spaces">; month: string },
 ) {
-	const { current } = await access(ctx, args.spaceId);
+	const { current, space } = await access(ctx, args.spaceId);
 	month(args.month);
 	const result = await results(ctx, args.spaceId, args.month);
 	const plan = await ctx.db

@@ -57,6 +57,10 @@ export class Memory {
 				predicates.push((row) => String(row[field]) < value);
 				return range;
 			},
+			lte: (field: string, value: number) => {
+				predicates.push((row) => Number(row[field]) <= value);
+				return range;
+			},
 		};
 		const field = (name: string) => (row: Row) => row[name];
 		const value = (item: unknown, row: Row) =>

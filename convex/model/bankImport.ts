@@ -3,6 +3,7 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { PlaidTransaction } from "../plaidClient";
+import { replaceSplits } from "./categories";
 
 async function ignored(
 	ctx: MutationCtx,
@@ -111,15 +112,28 @@ export async function applyChanges(
 			historicalAssignment?.spaceId ??
 			account.spaceId;
 		// Deletion can finish while bank sync has a page waiting to be applied.
-		if (!(await ctx.db.get(spaceId))) {
+		const space = await ctx.db.get(spaceId);
+		if (!space) {
 			await forgetImport(ctx, identifiers);
 			continue;
 		}
+		// A pending entry can transfer its splits to another row that the
+		// replacement scan has already passed. Normalize only copied splits.
+		const carriedSplits =
+			prior && prior._id !== (old ?? pending)?._id
+				? replaceSplits(
+						prior.splits,
+						(prior.spaceId === spaceId
+							? space
+							: await ctx.db.get(prior.spaceId)
+						)?.categoryReplacement,
+					)
+				: prior?.splits;
 		const splits =
 			kind !== "purchase"
 				? []
-				: prior?.splits.length
-					? resizeSplits(prior.splits, amount)
+				: carriedSplits?.length
+					? resizeSplits(carriedSplits, amount)
 					: [];
 		const needsClassification =
 			!prior?.edited &&

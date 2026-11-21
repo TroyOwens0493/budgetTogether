@@ -10,6 +10,7 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { QueryCtx } from "../_generated/server";
 import { access } from "../access";
 import { type funding, results } from "./accounting";
+import { activeCategories, replaceCarry, replaceLimits } from "./categories";
 import { type summary as fundSummary, sameAllocations } from "./funds";
 import { allocations } from "./personalFunding";
 
@@ -20,16 +21,20 @@ export async function dashboard(
 	const { space } = await access(ctx, args.spaceId);
 	month(args.month);
 	const result = await results(ctx, args.spaceId, args.month);
-	const plan = await ctx.db
+	const savedPlan = await ctx.db
 		.query("plans")
 		.withIndex("by_month", (q) =>
 			q.eq("spaceId", args.spaceId).eq("month", args.month),
 		)
 		.unique();
-	const categories = await ctx.db
-		.query("categories")
-		.withIndex("by_space", (q) => q.eq("spaceId", args.spaceId))
-		.collect();
+	const plan =
+		savedPlan && space.categoryReplacement
+			? {
+					...savedPlan,
+					limits: replaceLimits(savedPlan.limits, space.categoryReplacement),
+				}
+			: savedPlan;
+	const categories = await activeCategories(ctx, space);
 	const reserved = await ctx.db
 		.query("carry")
 		.withIndex("by_source", (q) =>
@@ -46,7 +51,9 @@ export async function dashboard(
 		balance: state.balance,
 		plan: state.plan,
 		categories: categories.sort((a, b) => a.order - b.order),
-		reserved,
+		reserved: reserved.map((row) =>
+			replaceCarry(row, space.categoryReplacement),
+		),
 		available: leftovers(
 			result.unreservedSavings,
 			plan?.savingsTarget ?? 0,

@@ -9,6 +9,7 @@ import {
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { access, label } from "../access";
+import { replaceSplits } from "./categories";
 import { validatePayments } from "./funds";
 
 export async function list(
@@ -23,7 +24,7 @@ export async function list(
 		limit?: number;
 	},
 ) {
-	await access(ctx, args.spaceId);
+	const { space } = await access(ctx, args.spaceId);
 	month(args.month);
 	const size = Math.max(1, Math.min(100, Math.floor(args.limit ?? 30)));
 	const result = await ctx.db
@@ -42,7 +43,13 @@ export async function list(
 			maximumBytesRead: 512_000,
 		});
 	// Filter only this bounded index block. Sparse matches can produce empty pages.
-	const matches = result.page.filter(
+	const rows = space.categoryReplacement
+		? result.page.map((entry) => ({
+				...entry,
+				splits: replaceSplits(entry.splits, space.categoryReplacement),
+			}))
+		: result.page;
+	const matches = rows.filter(
 		(x) =>
 			!x.removed &&
 			(!args.search ||
@@ -75,7 +82,7 @@ export async function save(
 		revision: number;
 	},
 ) {
-	await access(ctx, args.spaceId);
+	const { space } = await access(ctx, args.spaceId);
 	const account = await ctx.db.get(args.accountId);
 	const old = args.id ? await ctx.db.get(args.id) : null;
 	if (
@@ -98,7 +105,10 @@ export async function save(
 		validateSplits(args.amount, args.splits);
 		await validatePayments(ctx, args.spaceId, args.date, args.splits);
 		for (const s of args.splits)
-			if ((await ctx.db.get(s.categoryId))?.spaceId !== args.spaceId)
+			if (
+				s.categoryId === space.categoryReplacement?.categoryId ||
+				(await ctx.db.get(s.categoryId))?.spaceId !== args.spaceId
+			)
 				throw new ConvexError("Choose categories from this budget.");
 	} else if (args.splits.length)
 		throw new ConvexError("Only purchases and refunds use category splits.");
@@ -195,9 +205,10 @@ export async function reconcile(
 		throw new ConvexError(
 			"Choose an imported entry in the same account with the same amount.",
 		);
-	await access(ctx, manual.spaceId);
+	const { space } = await access(ctx, manual.spaceId);
 	assertRevision(manual.revision, args.revision);
-	await validatePayments(ctx, manual.spaceId, imported.date, manual.splits);
+	const splits = replaceSplits(manual.splits, space.categoryReplacement);
+	await validatePayments(ctx, manual.spaceId, imported.date, splits);
 	if (
 		(await linkedContribution(ctx, manual._id)) ||
 		(await linkedContribution(ctx, imported._id))
@@ -206,8 +217,8 @@ export async function reconcile(
 	await ctx.db.patch(imported._id, {
 		kind: manual.kind,
 		note: manual.note,
-		splits: manual.splits,
-		funded: manual.splits.some((split) => Boolean(split.fundId)),
+		splits,
+		funded: splits.some((split) => Boolean(split.fundId)),
 		edited: true,
 		classificationStatus: "manual",
 		classificationRetryAt: undefined,

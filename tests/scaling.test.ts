@@ -253,6 +253,152 @@ test("fund balances skip nonposted rows and retain backdated bank corrections", 
 	);
 });
 
+test("category replacement bounds transaction scans and keeps references consistent between batches", async () => {
+	const { db, privateId, accountId, categoryId } = await fixture();
+	const replacementId = (
+		await invoke(budgets.categories, db, { spaceId: privateId })
+	)[0]._id;
+	const entries = [];
+	for (let i = 0; i < 226; i++)
+		entries.push(
+			await entry(db, privateId, accountId, 100, "purchase", categoryId),
+		);
+	const unrelated = await entry(
+		db,
+		privateId,
+		accountId,
+		100,
+		"purchase",
+		replacementId,
+	);
+	const savedPlan = {
+		spaceId: privateId,
+		month: "2026-09",
+		limits: [
+			{ categoryId, amount: 100 },
+			{ categoryId: replacementId, amount: 300 },
+		],
+		expectedIncome: 400,
+		savingsTarget: 0,
+		saved: true,
+		reviewed: false,
+		revision: 4,
+	};
+	const plan = await db.insert("plans", savedPlan);
+	const unrelatedPlan = await db.insert("plans", {
+		...savedPlan,
+		month: "2026-08",
+		limits: [{ categoryId: replacementId, amount: 400 }],
+	});
+	const carry = await db.insert("carry", {
+		spaceId: privateId,
+		sourceMonth: "2026-09",
+		destinationMonth: "2026-10",
+		categoryId,
+		amount: 100,
+	});
+	db.forbidCollect = new Set(["transactions", "plans", "carry"]);
+	db.reads = [];
+	await invoke(budgets.deleteCategory, db, {
+		id: categoryId,
+		replacementId,
+		revision: 0,
+	});
+	assert.ok(db.scheduled.length);
+	assert.ok(await db.get(categoryId));
+	assert.ok(
+		!(await invoke(budgets.categories, db, { spaceId: privateId })).some(
+			(row) => row._id === categoryId,
+		),
+	);
+	const visible = await invoke(budgets.transactions, db, {
+		spaceId: privateId,
+		month: "2026-09",
+		categoryId: replacementId,
+		limit: 2,
+	});
+	assert.equal(visible.rows[1]._id, entries.at(-1));
+	assert.equal(visible.rows[1].splits[0].categoryId, replacementId);
+	// This row has not been migrated yet. A bank correction can move it
+	// earlier than a date-based cursor would have reached.
+	await db.patch(visible.rows[1]._id, { date: "2020-01-01" });
+	const copiedPlanArgs = { spaceId: privateId, month: "2026-09" };
+	await invoke(budgets.repeatPlan, db, copiedPlanArgs);
+	const copiedPlan = [...db.rows.values()].find(
+		(row) => row.month === "2026-10" && row.spaceId === privateId,
+	);
+	assert.ok(copiedPlan);
+	assert.deepEqual(copiedPlan.limits, [
+		{ categoryId: replacementId, amount: 400 },
+	]);
+	await assert.rejects(
+		() =>
+			invoke(budgets.saveTransaction, db, {
+				spaceId: privateId,
+				accountId,
+				amount: 100,
+				kind: "purchase",
+				date: "2026-09-10",
+				description: "Stale editor",
+				note: "",
+				pending: false,
+				splits: [{ categoryId, amount: 100 }],
+				revision: 0,
+			}),
+		/Choose categories from this budget/,
+	);
+	await assert.rejects(
+		() =>
+			invoke(budgets.savePlan, db, {
+				...copiedPlanArgs,
+				expectedIncome: 400,
+				savingsTarget: 0,
+				limits: [{ categoryId, amount: 400 }],
+				revision: 4,
+			}),
+		/Every category must belong to this budget/,
+	);
+	const batch = db.scheduled.shift();
+	assert.ok(batch);
+	assert.equal(batch.name, "budgets:continueCategoryReplacement");
+	await invoke(budgets.continueCategoryReplacement, db, batch.args as never);
+	const beforeRetry = structuredClone(db.rows);
+	await invoke(budgets.continueCategoryReplacement, db, batch.args as never);
+	assert.deepEqual(db.rows, beforeRetry);
+	for (let i = 0; db.scheduled.length; i++) {
+		assert.ok(i < 10, "replacement did not finish");
+		const step = db.scheduled.shift();
+		assert.ok(step);
+		assert.equal(step.name, batch.name);
+		await invoke(budgets.continueCategoryReplacement, db, step.args as never);
+	}
+	assert.ok(
+		db.reads
+			.filter((x) => x.table === "transactions" && x.index === "by_space")
+			.every((x) => x.method === "paginate" && x.rows <= 100),
+	);
+	assert.equal(
+		db.reads.filter((x) => x.table === "transactions" && x.index === "by_space")
+			.length,
+		3,
+	);
+	for (const id of entries) {
+		assert.deepEqual((await db.get(id))?.splits, [
+			{ categoryId: replacementId, amount: 100 },
+		]);
+		assert.equal((await db.get(id))?.revision, 1);
+	}
+	assert.equal((await db.get(unrelated))?.revision, 0);
+	assert.equal((await db.get(plan))?.revision, 5);
+	assert.equal((await db.get(unrelatedPlan))?.revision, 5);
+	assert.equal((await db.get(copiedPlan._id))?.revision, 1);
+	assert.deepEqual((await db.get(plan))?.limits, [
+		{ categoryId: replacementId, amount: 400 },
+	]);
+	assert.equal((await db.get(carry))?.categoryId, replacementId);
+	assert.equal(await db.get(categoryId), null);
+});
+
 const tx = (
 	transaction_id: string,
 	extra: Partial<PlaidTransaction> = {},

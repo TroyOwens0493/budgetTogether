@@ -2,6 +2,7 @@ import { nextMonth, totals } from "../../src/domain/budget";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { access } from "../access";
+import { replaceCarry, replaceSplits } from "./categories";
 import { summary as fundSummary } from "./funds";
 import {
 	allocations as personalAllocations,
@@ -14,7 +15,7 @@ export async function funding(
 	spaceId: Id<"spaces">,
 	m: string,
 ) {
-	await access(ctx, spaceId);
+	const { space } = await access(ctx, spaceId);
 	let outgoing = await ctx.db
 		.query("contributions")
 		.withIndex("by_private", (q) => q.eq("privateId", spaceId).eq("month", m))
@@ -67,14 +68,13 @@ export async function funding(
 			}
 		return value;
 	}
-	const space = await ctx.db.get(spaceId);
-	const sharedId = space ? await sharedForPersonal(ctx, space, m) : null;
+	const sharedId = await sharedForPersonal(ctx, space, m);
 	const personalIncoming = sharedId
 		? await personalAllocations(ctx, sharedId, m)
 		: [];
 	const ownAllocation = personalIncoming.find((x) => x.privateId === spaceId);
 	const personalOutgoing =
-		space?.type === "shared" ? await personalAllocations(ctx, spaceId, m) : [];
+		space.type === "shared" ? await personalAllocations(ctx, spaceId, m) : [];
 	const allocatedIn = ownAllocation?.amount ?? 0;
 	const allocatedOut = personalOutgoing.reduce((sum, x) => sum + x.amount, 0);
 	return {
@@ -86,7 +86,9 @@ export async function funding(
 		actualOutgoing: allocatedOut + (await actual(outgoing)),
 		actualIncoming: allocatedIn + (await actual(incoming)),
 		carry: carry.reduce((s, x) => s + x.amount, 0),
-		allocations: carry,
+		allocations: carry.map((row) =>
+			replaceCarry(row, space.categoryReplacement),
+		),
 	};
 }
 
@@ -96,7 +98,7 @@ export async function results(
 	m: string,
 ) {
 	const { space } = await access(ctx, spaceId);
-	const entries = await ctx.db
+	const rows = await ctx.db
 		.query("transactions")
 		.withIndex("by_space_date", (q) =>
 			q
@@ -105,6 +107,12 @@ export async function results(
 				.lt("date", `${nextMonth(m)}-01`),
 		)
 		.collect();
+	const entries = space.categoryReplacement
+		? rows.map((row) => ({
+				...row,
+				splits: replaceSplits(row.splits, space.categoryReplacement),
+			}))
+		: rows;
 	const funds = await funding(ctx, spaceId, m);
 	const fundedBy = await sharedForPersonal(ctx, space, m);
 	let counted = entries;
