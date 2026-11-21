@@ -116,9 +116,15 @@ export async function applyChanges(
 			await forgetImport(ctx, identifiers);
 			continue;
 		}
+		// The merge rewrites splits kept on the same row. Map only splits
+		// copied from another row, which the merge may have already scanned.
+		const copied = prior && prior._id !== (old ?? pending)?._id;
 		const splits =
 			kind === "purchase" && prior?.splits.length
-				? resizeSplits(await resolveCategories(ctx, prior.splits), amount)
+				? resizeSplits(
+						copied ? await resolveCategories(ctx, prior.splits) : prior.splits,
+						amount,
+					)
 				: [];
 		const needsClassification =
 			!prior?.edited &&

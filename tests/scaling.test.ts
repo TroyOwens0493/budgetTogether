@@ -729,6 +729,46 @@ test("reconciliation and bank sync resolve categories when copying into scanned 
 		assert.equal((await db.get(transaction))?.revision, 1);
 });
 
+test("bank corrections leave same-row splits for the category merge to rewrite", async () => {
+	const { db, privateId, accountId, categoryId, connectionId } =
+		await bankFixture();
+	const replacement = [...db.rows.values()].find((row) => row.name === "Other");
+	assert.ok(replacement);
+	const replacementId = id<"categories">(replacement._id);
+	const imported = await entry(
+		db,
+		privateId,
+		accountId,
+		200,
+		"purchase",
+		categoryId,
+	);
+	await db.patch(imported, { source: "plaid", externalId: "same" });
+	db.forbidCollect.delete("categories");
+	await invoke(budgets.deleteCategory, db, {
+		id: categoryId,
+		replacementId,
+		revision: 0,
+	});
+	db.forbidCollect.add("categories");
+	// Run carry only; the transactions batch has not scanned this row yet.
+	assert.equal(await runCategoryBatch(db), "carry");
+	await invoke(bank.apply, db, {
+		id: connectionId,
+		cursor: "next",
+		changed: [tx("same", { amount: 3 })],
+		removed: [],
+	});
+	assert.deepEqual((await db.get(imported))?.splits, [
+		{ categoryId, amount: 300 },
+	]);
+	await drainCategoryBatches(db);
+	assert.equal(await db.get(categoryId), null);
+	const row = await db.get(imported);
+	assert.deepEqual(row?.splits, [{ categoryId: replacementId, amount: 300 }]);
+	assert.equal(row?.revision, 2);
+});
+
 test("transaction queries bound sparse filtering and can continue through empty pages", async () => {
 	const { db, privateId, accountId, categoryId } = await fixture();
 	const expected: string[] = [];

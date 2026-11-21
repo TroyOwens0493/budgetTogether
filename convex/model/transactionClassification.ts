@@ -2,7 +2,6 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { type Classification, JEV_REVIEW_CONFIDENCE } from "../jevClient";
-import { resolveCategories } from "./categories";
 
 const LEASE_MS = 60_000;
 export async function queue(ctx: MutationCtx, id: Id<"transactions">) {
@@ -121,9 +120,12 @@ export async function complete(
 		suggestedKind: result.kind,
 		splits:
 			result.kind === "purchase" && category
-				? await resolveCategories(ctx, [
-						{ categoryId: category._id, amount: row.amount },
-					])
+				? [
+						{
+							categoryId: category.mergingInto ?? category._id,
+							amount: row.amount,
+						},
+					]
 				: [],
 		classificationStatus: needsReview ? "review" : "classified",
 		classificationRetryAt: undefined,
