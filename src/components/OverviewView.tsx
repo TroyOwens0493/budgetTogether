@@ -211,7 +211,8 @@ export function OverviewView({
 					))}
 				{!data.entries.length && (
 					<p className="empty-state">
-						Connect an account to see your activity here.
+						No transactions this month. Connect a bank in Accounts &amp;
+						settings, or add a transaction.
 					</p>
 				)}
 			</section>

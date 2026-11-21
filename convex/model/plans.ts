@@ -153,7 +153,10 @@ export async function repeat(ctx: MutationCtx, args: MonthArgs) {
 			q.eq("spaceId", args.spaceId).eq("month", destination),
 		)
 		.unique();
-	if (existing) throw new ConvexError("The next month already has a plan.");
+	if (existing)
+		throw new ConvexError(
+			"Next month already has a budget. Open it to make changes there.",
+		);
 	await ctx.db.insert("plans", {
 		spaceId: args.spaceId,
 		month: destination,

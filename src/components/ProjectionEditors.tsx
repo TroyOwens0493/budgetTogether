@@ -25,7 +25,12 @@ function useEditorError() {
 		try {
 			return await work();
 		} catch (error) {
-			setError(errorMessage(error, "The save failed. Try again."));
+			setError(
+				errorMessage(
+					error,
+					"Your changes weren't saved. Check your connection and try again.",
+				),
+			);
 			throw error;
 		}
 	}

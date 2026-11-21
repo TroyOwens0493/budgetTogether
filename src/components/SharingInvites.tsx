@@ -37,16 +37,15 @@ export function SharingInvites({ email, run }: { email: string; run: Run }) {
 					</p>
 					<p>
 						{outgoing.expiresAt <= Date.now()
-							? "Invitation expired."
-							: "Invitation email sent."}{" "}
-						Expires {new Date(outgoing.expiresAt).toLocaleString()}.
+							? `Invitation expired ${new Date(outgoing.expiresAt).toLocaleString()}. Select Resend invitation to invite them again.`
+							: `Expires ${new Date(outgoing.expiresAt).toLocaleString()}.`}
 					</p>
 					<p
 						aria-live="polite"
 						className={outgoing.delivery === "failed" ? "over" : undefined}
 					>
 						{outgoing.delivery === "failed"
-							? "The email could not be sent. Please resend the invitation."
+							? "The invitation email couldn't be sent. Check the address, then select Resend invitation."
 							: outgoing.delivery === "sent"
 								? "Invitation email sent."
 								: "Invitation email queued."}

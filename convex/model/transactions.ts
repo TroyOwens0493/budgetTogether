@@ -85,7 +85,10 @@ export async function save(
 		(old && (old.spaceId !== args.spaceId || old.accountId !== args.accountId))
 	)
 		throw new ConvexError("Choose an account in this budget.");
-	if (args.id && !old) throw new ConvexError("Transaction not found.");
+	if (args.id && !old)
+		throw new ConvexError(
+			"This transaction no longer exists. It may have been deleted in another tab or by your partner.",
+		);
 	const pending = old?.source === "plaid" && args.pending;
 	assertRevision(old?.revision ?? 0, args.revision);
 	money(args.amount);
@@ -161,7 +164,10 @@ export async function remove(
 	args: { id: Id<"transactions">; revision: number },
 ) {
 	const entry = await ctx.db.get(args.id);
-	if (!entry) throw new ConvexError("Transaction not found.");
+	if (!entry)
+		throw new ConvexError(
+			"This transaction no longer exists. It may have been deleted in another tab or by your partner.",
+		);
 	await access(ctx, entry.spaceId);
 	assertRevision(entry.revision, args.revision);
 	if (entry.source !== "manual")

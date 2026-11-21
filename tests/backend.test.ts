@@ -743,14 +743,14 @@ test("possible duplicates pause imports and require an explicit same or differen
 	db.current = "bob";
 	await assert.rejects(
 		invoke(bank.review, db, { id: pending }),
-		/Connection not found/,
+		/no longer exists/,
 	);
 	await assert.rejects(
 		invoke(bank.confirmAccounts, db, {
 			id: pending,
 			decisions: [{ accountId: "new", sameAccount: false }],
 		}),
-		/not awaiting review/,
+		/already reviewed/,
 	);
 	db.current = "alice";
 	await invoke(bank.confirmAccounts, db, {

@@ -7,6 +7,7 @@ import {
 	timeZoneError,
 } from "../domain/validation";
 import { authClient } from "../lib/auth-client";
+import { authErrorMessage } from "../lib/error-message";
 import { Modal } from "./ui";
 import { ValidatedInput } from "./ValidatedInput";
 import type { Home, Run } from "./view-types";
@@ -32,7 +33,13 @@ export function ProfileView({
 					void run(async () => {
 						const name = String(data.get("name"));
 						const result = await authClient.updateUser({ name });
-						if (result.error) throw new Error(result.error.message);
+						if (result.error)
+							throw new Error(
+								authErrorMessage(
+									result.error,
+									"We couldn't update your name. Check your connection and try again.",
+								),
+							);
 						await setup({ name, timeZone: String(data.get("timeZone")) });
 					});
 				}}
@@ -86,7 +93,13 @@ export function ProfileView({
 										newPassword: String(f.get("new")),
 										revokeOtherSessions: true,
 									});
-									if (result.error) throw new Error(result.error.message);
+									if (result.error)
+										throw new Error(
+											authErrorMessage(
+												result.error,
+												"We couldn't change your password. Check your connection and try again.",
+											),
+										);
 								})
 							)
 								setPasswordOpen(false);

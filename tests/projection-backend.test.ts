@@ -545,6 +545,14 @@ test("forecast errors hide provider details and simplify previously saved messag
 		],
 		[
 			"Tiingo's request limit was reached.",
+			"The historical return lookup limit was reached. Try again later, or enter an annual return override in Edit forecast.",
+		],
+		[
+			"Historical returns need a Tiingo API token. Set up Tiingo or enter your own annual return.",
+			"Historical returns aren't set up in this app yet. Enter an annual return override in Edit forecast.",
+		],
+		[
+			"Tiingo returned invalid price history. Try again later or enter a return.",
 			"Historical returns couldn't be loaded right now. Select Load historical returns to try again later, or enter an annual return override in Edit forecast.",
 		],
 		[
@@ -961,7 +969,7 @@ test("bank sync routes Investments through holdings, retains failed imports, and
 		await invoke(budgets.setup, db, { name: "Bob", timeZone: "UTC" });
 		await assert.rejects(
 			() => invoke(bank.sync, db, { id: connectionId }),
-			/not found/,
+			/no longer exists/,
 		);
 	} finally {
 		for (const [name, value] of Object.entries({

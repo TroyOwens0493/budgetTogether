@@ -55,6 +55,16 @@ function historicalPriceError(error: string | undefined) {
 		return "No price history was found for this symbol. Check the trading symbol, or enter an annual return override in Edit forecast.";
 	if (/at least one year/i.test(error))
 		return "This symbol has less than a year of price history. Enter an annual return override in Edit forecast.";
+	if (/API token|authorize/i.test(error))
+		return "Historical returns aren't set up in this app yet. Enter an annual return override in Edit forecast.";
+	if (/trading symbol/i.test(error))
+		return "This trading symbol can't be looked up. Enter an annual return override in Edit forecast.";
+	if (/hourly/i.test(error))
+		return "The historical return lookup limit was reached. Try again in an hour, or enter an annual return override in Edit forecast.";
+	if (/daily/i.test(error))
+		return "The historical return lookup limit was reached. Try again tomorrow, or enter an annual return override in Edit forecast.";
+	if (/limit/i.test(error))
+		return "The historical return lookup limit was reached. Try again later, or enter an annual return override in Edit forecast.";
 	return "Historical returns couldn't be loaded right now. Select Load historical returns to try again later, or enter an annual return override in Edit forecast.";
 }
 
@@ -224,7 +234,10 @@ export async function saveHolding(ctx: MutationCtx, args: HoldingInput) {
 	if (["bond", "cd"].includes(args.type) && args.monthlyContribution !== 0)
 		throw new ConvexError("Add a new holding for a new bond or CD purchase.");
 	const old = args.id ? await ctx.db.get(args.id) : null;
-	if (args.id && !old) throw new ConvexError("Holding not found.");
+	if (args.id && !old)
+		throw new ConvexError(
+			"This holding no longer exists. It may have been removed in another tab or by your partner.",
+		);
 	let accountId = old?.accountId ?? args.accountId;
 	let account = accountId ? await ctx.db.get(accountId) : null;
 	if (
@@ -234,7 +247,9 @@ export async function saveHolding(ctx: MutationCtx, args: HoldingInput) {
 			!account.investment ||
 			!account.active)
 	)
-		throw new ConvexError("Investment account not found in this budget.");
+		throw new ConvexError(
+			"This investment account is no longer in this budget. It may have been moved or disconnected.",
+		);
 	if (!accountId) {
 		if (
 			!["brokerage", "401k", "ira", "roth ira", "other retirement"].includes(
@@ -332,7 +347,10 @@ export async function removeHolding(
 ) {
 	const holding = await ctx.db.get(id);
 	const account = holding ? await ctx.db.get(holding.accountId) : null;
-	if (!holding || !account) throw new ConvexError("Holding not found.");
+	if (!holding || !account)
+		throw new ConvexError(
+			"This holding no longer exists. It may have been removed in another tab or by your partner.",
+		);
 	await access(ctx, account.spaceId);
 	if (account.connectionId)
 		throw new ConvexError(
@@ -353,7 +371,9 @@ export async function includeCash(
 		!account ||
 		(!account.investment && !["checking", "savings"].includes(account.type))
 	)
-		throw new ConvexError("Forecast account not found.");
+		throw new ConvexError(
+			"This account is no longer in this budget. It may have been moved or disconnected.",
+		);
 	await access(ctx, account.spaceId);
 	assertRevision(account.revision, revision);
 	await ctx.db.patch(id, {

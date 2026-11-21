@@ -95,7 +95,7 @@ export function AccountsView({
 						</article>
 					))}
 				</div>
-				{!accounts?.length && (
+				{accounts?.length === 0 && (
 					<p className="empty-state">
 						No accounts yet. Connect a bank to import transactions
 						automatically.
@@ -167,7 +167,7 @@ export function AccountsView({
 						</div>
 					);
 				})}
-				{!connections?.length && <p>No bank connections yet.</p>}
+				{connections?.length === 0 && <p>No bank connections yet.</p>}
 			</section>
 			{space.type === "private" && !hasSharedBudget && (
 				<SharingInvites email={home.user.email} run={run} />

@@ -5,6 +5,7 @@ import {
 	passwordLimits,
 } from "../domain/validation";
 import { authClient } from "../lib/auth-client";
+import { authErrorMessage } from "../lib/error-message";
 import { ValidatedInput } from "./ValidatedInput";
 export function Auth() {
 	const invited =
@@ -14,10 +15,17 @@ export function Auth() {
 		typeof window === "undefined"
 			? null
 			: new URLSearchParams(window.location.search).get("token");
+	// Better Auth redirects expired or used reset links here with this error.
+	const expiredLink =
+		typeof window !== "undefined" &&
+		new URLSearchParams(window.location.search).get("error") ===
+			"INVALID_TOKEN";
 	const [mode, setMode] = useState<"login" | "register" | "request" | "reset">(
-		token ? "reset" : "login",
+		token ? "reset" : expiredLink ? "request" : "login",
 	);
-	const [message, setMessage] = useState("");
+	const [message, setMessage] = useState(
+		expiredLink ? authErrorMessage({ code: "INVALID_TOKEN" }, "") : "",
+	);
 	const [busy, setBusy] = useState(false);
 	async function submit(event: FormEvent<HTMLFormElement>) {
 		event.preventDefault();
@@ -26,8 +34,19 @@ export function Auth() {
 		const data = new FormData(event.currentTarget);
 		const email = String(data.get("email") ?? "");
 		const password = String(data.get("password") ?? "");
+		const fallback = {
+			login: "We couldn't sign you in. Check your connection and try again.",
+			register:
+				"We couldn't create your account. Check your connection and try again.",
+			request:
+				"We couldn't send a reset link. Check your connection and try again.",
+			reset:
+				"We couldn't update your password. Check your connection and try again.",
+		}[mode];
 		try {
-			let result: { error: { message?: string } | null };
+			let result: {
+				error: { code?: string; status?: number } | null;
+			};
 			if (mode === "register")
 				result = await authClient.signUp.email({
 					name: String(data.get("name")),
@@ -46,8 +65,10 @@ export function Auth() {
 					newPassword: password,
 					token: token ?? "",
 				});
-			if (result.error)
-				throw new Error(result.error.message ?? "Please try again.");
+			if (result.error) {
+				setMessage(authErrorMessage(result.error, fallback));
+				return;
+			}
 			if (mode === "request")
 				setMessage("If this email has an account, a reset link will be sent.");
 			else if (mode === "reset") {
@@ -55,8 +76,8 @@ export function Auth() {
 				setMode("login");
 				setMessage("Password updated. Sign in with your new password.");
 			}
-		} catch (error) {
-			setMessage(error instanceof Error ? error.message : "Please try again.");
+		} catch {
+			setMessage(fallback);
 		} finally {
 			setBusy(false);
 		}

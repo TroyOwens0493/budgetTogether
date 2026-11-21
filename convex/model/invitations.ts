@@ -59,7 +59,9 @@ export async function queue(
 		args.id &&
 		(!old || old.inviterId !== current._id || old.status !== "pending")
 	)
-		throw new ConvexError("This invitation can no longer be resent.");
+		throw new ConvexError(
+			"This invitation can no longer be resent. Send a new invitation instead.",
+		);
 	const email = (old?.email ?? args.email ?? "").trim().toLowerCase();
 	const error = partnerEmailError(email, current.email);
 	if (error) throw new ConvexError(error);
@@ -97,9 +99,11 @@ export async function revoke(ctx: MutationCtx, id: Id<"invitations">) {
 	const current = await user(ctx);
 	const invite = await ctx.db.get(id);
 	if (!invite || invite.inviterId !== current._id)
-		throw new ConvexError("Invitation not found.");
+		throw new ConvexError(
+			"This invitation no longer exists. It may have been accepted or canceled.",
+		);
 	if (invite.status !== "pending")
-		throw new ConvexError("This invitation is no longer pending.");
+		throw new ConvexError("This invitation was already accepted or canceled.");
 	await ctx.db.patch(id, { status: "revoked" });
 }
 
@@ -150,7 +154,7 @@ export async function accept(ctx: MutationCtx, tokenHash: string) {
 		invite.inviterId === current._id
 	)
 		throw new ConvexError(
-			"This invitation is invalid, expired, or belongs to another email address.",
+			"This invitation has expired, was canceled, or was sent to a different email address. Check that you're signed in with the invited email, or ask your partner to send a new invitation.",
 		);
 	if (await activeShared(ctx, current._id))
 		throw new ConvexError(
@@ -167,7 +171,9 @@ export async function accept(ctx: MutationCtx, tokenHash: string) {
 		.withIndex("by_user", (q) => q.eq("userId", invite.inviterId))
 		.unique();
 	if (!inviter)
-		throw new ConvexError("The sender's account is no longer available.");
+		throw new ConvexError(
+			"The person who invited you no longer has an account. Ask them to sign up again and send a new invitation.",
+		);
 	const spaceId = await ctx.db.insert("spaces", {
 		name: "Shared",
 		type: "shared",

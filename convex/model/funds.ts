@@ -147,7 +147,9 @@ export async function save(
 	money(args.openingBalance, true);
 	const old = args.id ? await ctx.db.get(args.id) : null;
 	if (args.id && (!old || old.spaceId !== args.spaceId))
-		throw new ConvexError("Fund not found in this budget.");
+		throw new ConvexError(
+			"This fund no longer exists. It may have been deleted in another tab or by your partner.",
+		);
 	assertRevision(old?.revision ?? 0, args.revision);
 	if (
 		old &&

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { ConvexError } from "convex/values";
-import { errorMessage } from "../src/lib/error-message";
+import { authErrorMessage, errorMessage } from "../src/lib/error-message";
 
 const fallback = "The request failed. Try again.";
 
@@ -38,4 +38,23 @@ test("local validation errors keep their message and unknown failures use the fa
 	);
 	for (const error of [null, undefined, "diagnostic details", {}])
 		assert.equal(errorMessage(error, fallback), fallback);
+});
+
+test("auth errors use plain text and hide developer messages", () => {
+	assert.match(
+		authErrorMessage({ code: "INVALID_TOKEN" }, fallback),
+		/Request a new link/,
+	);
+	assert.match(
+		authErrorMessage({ code: "INVALID_EMAIL_OR_PASSWORD" }, fallback),
+		/don't match/,
+	);
+	assert.match(authErrorMessage({ status: 429 }, fallback), /Too many/);
+	for (const error of [
+		{ code: "FAILED_TO_CREATE_USER" },
+		{ code: "INVALID_ORIGIN" },
+		{},
+		null,
+	])
+		assert.equal(authErrorMessage(error, fallback), fallback);
 });

@@ -55,7 +55,10 @@ export async function save(
 	if (error) throw new ConvexError(error);
 	if (args.id) {
 		const existing = all.find((category) => category._id === args.id);
-		if (!existing) throw new ConvexError("Category not found.");
+		if (!existing)
+			throw new ConvexError(
+				"This category no longer exists. It may have been deleted in another tab or by your partner.",
+			);
 		assertNotMerging(existing);
 		assertRevision(existing.revision, args.revision ?? -1);
 		await ctx.db.patch(args.id, {
