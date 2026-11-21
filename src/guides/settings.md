@@ -19,7 +19,7 @@ Look near the bottom of the menu. On a phone, tap **Open navigation** first.
 ![The profile form with four numbered highlights and a read-only email field.](/learn/settings/profile.png "Your profile settings")
 
 1. Edit **Name** to change the name Budget Together uses for you.
-2. Enter a valid **Time zone**, such as `America/Boise`. Each budget uses the reporting time zone that was set at creation.
+2. Enter a valid **Time zone**, such as `America/Boise`. This changes your profile only. Budgets you already have keep the reporting time zone they started with.
 3. Select **Save profile** to save your name and profile time zone.
 4. Select **Change password** to open the password form.
 

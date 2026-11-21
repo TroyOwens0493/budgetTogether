@@ -5,7 +5,7 @@ order: 30
 section: Planning
 ---
 
-A Monthly plan gives each dollar a place for one calendar month. It includes your Expected income, a Category limit for each type of spending, and a Savings target.
+A monthly plan gives each dollar a place for one calendar month. It includes your expected income, a category limit for each type of spending, and a savings target.
 
 ## Enter your monthly amounts
 
@@ -16,11 +16,11 @@ A Monthly plan gives each dollar a place for one calendar month. It includes you
 ![The Monthly spending form with highlights for income, a category limit, Funds, and the savings target.](/learn/monthly-budget/monthly-spending.png "A monthly plan for October")
 
 1. In **Expected take-home income**, enter what you expect to receive after taxes and deductions.
-2. Enter a Category limit for each spending category, such as **Groceries**. Enter zero for a category you do not plan to use.
+2. Enter a category limit for each spending category, such as **Groceries**. Enter zero for a category you do not plan to use.
 3. If you have set up any funds for the month, the **Funds** category shows the total they need. To change that amount, update the goals in [Funds](/learn/funds).
 4. In **Monthly savings target**, enter how much you plan to save for the month apart from your funds. This is a planning amount.
 
-If your private budget gets a Personal allocation, you enter income in the shared budget. See [Shared budgets](/learn/shared-budgets).
+If you have a shared budget, you enter household income there, and your private budget gets a personal allocation from it. See [Shared budgets](/learn/shared-budgets).
 
 ## Balance and save your plan
 
