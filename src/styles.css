@@ -612,6 +612,15 @@ td:last-child {
 	font-size: 12px;
 	color: var(--muted);
 }
+.plan-mobile-balance {
+	display: none;
+}
+.plan-save-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
+}
 .plan-grid {
 	display: grid;
 	grid-template-columns: 1.35fr 1fr;
@@ -1139,6 +1148,46 @@ dialog::backdrop {
 		gap: 10px;
 		flex-direction: column;
 		align-items: stretch;
+	}
+	.plan-grid > .plan-summary {
+		display: contents;
+	}
+	.plan-breakdown {
+		padding: 20px;
+		border-radius: 10px;
+	}
+	.plan-breakdown .total {
+		display: none;
+	}
+	.plan-save {
+		position: sticky;
+		bottom: 0;
+		z-index: 2;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+		background: #f6f7f3;
+		color: #263630;
+		border-top: 1px solid var(--border);
+		box-shadow: 0 -4px 12px #26363012;
+	}
+	.plan-mobile-balance,
+	.plan-mobile-balance strong {
+		display: block;
+	}
+	.plan-mobile-balance {
+		flex-shrink: 0;
+	}
+	.plan-save-controls {
+		justify-content: flex-end;
+	}
+	.plan-save-controls button {
+		width: auto;
+		margin: 0;
+		background: var(--green);
+		color: white;
 	}
 	.filters .search-input {
 		width: 100%;

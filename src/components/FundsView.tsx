@@ -51,9 +51,11 @@ export function FundsView({
 					<span>Reserved in this budget</span>
 					<strong>{usd(data.contributed)}</strong>
 					<small>
-						{data.total === data.contributed
-							? "This month’s fund amounts are reserved."
-							: "Save the monthly budget to reserve its current fund amounts."}
+						{data.items.length === 0
+							? "No funds to reserve this month."
+							: data.total === data.contributed
+								? "This month’s fund amounts are reserved."
+								: "Save the monthly budget to reserve its current fund amounts."}
 					</small>
 				</article>
 			</div>

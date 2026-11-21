@@ -30,6 +30,7 @@ export function PlanView({
 		createPlanDraft(data.plan, data.categories),
 	);
 	const [saving, setSaving] = useState(false);
+	const [savedNotice, setSavedNotice] = useState("");
 	// A cached response or an older server may not include the funding list yet.
 	const currentFunding = data.personalFunding ?? [];
 	const [fundingSnapshot, setFundingSnapshot] = useState<
@@ -69,6 +70,7 @@ export function PlanView({
 		)
 			return;
 		setSaving(true);
+		setSavedNotice("");
 		try {
 			const saved = await run(
 				() =>
@@ -86,9 +88,10 @@ export function PlanView({
 									}
 								: undefined,
 					}),
-				"Budget saved.",
+				"",
 			);
 			if (saved) {
+				setSavedNotice("Budget saved.");
 				setDraft((current) => ({ ...current, revision: draft.revision + 1 }));
 				setFundingSnapshot(
 					data.personalFunding === undefined
@@ -131,7 +134,11 @@ export function PlanView({
 					</button>
 				</div>
 			)}
-			<form onSubmit={submit} className="plan-grid">
+			<form
+				onSubmit={submit}
+				onChange={() => setSavedNotice("")}
+				className="plan-grid"
+			>
 				<section className="panel">
 					<h2>Monthly spending</h2>
 					<fieldset disabled={!active || saving}>
@@ -234,75 +241,91 @@ export function PlanView({
 							/>
 						</label>
 						<p className="muted">
-							Category limits repeat next month. Allocate all available money,
-							then save your budget.
+							Allocate all available money, then save your budget.
 						</p>
 					</fieldset>
 				</section>
 				<aside className="panel green plan-summary">
-					<p className="eyebrow">THE BIG PICTURE</p>
-					<h2>Money available to plan</h2>
-					<strong className="big-number">{draftMoney(result.available)}</strong>
-					<dl>
-						<div>
-							<dt>Expected income</dt>
-							<dd>{draftMoney(result.expectedIncome)}</dd>
-						</div>
-						<div>
-							<dt>Incoming budget funding</dt>
-							<dd>{draftMoney(result.incoming)}</dd>
-						</div>
-						<div>
-							<dt>Carry-forward</dt>
-							<dd>{usd(data.funds.carry)}</dd>
-						</div>
-						<div>
-							<dt>Outgoing budget funding</dt>
-							<dd>{personalFunding ? usd(outgoing) : "Check amounts"}</dd>
-						</div>
-						<div>
-							<dt>Spending limits</dt>
-							<dd>{draftMoney(result.total)}</dd>
-						</div>
-						{data.fundPlan.items.length > 0 && (
+					<div className="plan-breakdown green">
+						<p className="eyebrow">THE BIG PICTURE</p>
+						<h2>Money available to plan</h2>
+						<strong className="big-number">
+							{draftMoney(result.available)}
+						</strong>
+						<dl>
 							<div>
-								<dt>Funds</dt>
-								<dd>{usd(data.fundPlan.total)}</dd>
+								<dt>Expected income</dt>
+								<dd>{draftMoney(result.expectedIncome)}</dd>
 							</div>
-						)}
-						<div>
-							<dt>Savings target</dt>
-							<dd>{draftMoney(result.savingsTarget)}</dd>
+							<div>
+								<dt>Incoming budget funding</dt>
+								<dd>{draftMoney(result.incoming)}</dd>
+							</div>
+							<div>
+								<dt>Carry-forward</dt>
+								<dd>{usd(data.funds.carry)}</dd>
+							</div>
+							<div>
+								<dt>Outgoing budget funding</dt>
+								<dd>{personalFunding ? usd(outgoing) : "Check amounts"}</dd>
+							</div>
+							<div>
+								<dt>Spending limits</dt>
+								<dd>{draftMoney(result.total)}</dd>
+							</div>
+							{data.fundPlan.items.length > 0 && (
+								<div>
+									<dt>Funds</dt>
+									<dd>{usd(data.fundPlan.total)}</dd>
+								</div>
+							)}
+							<div>
+								<dt>Savings target</dt>
+								<dd>{draftMoney(result.savingsTarget)}</dd>
+							</div>
+							<div className="total">
+								<dt>Left to allocate</dt>
+								<dd>{draftMoney(result.balance)}</dd>
+							</div>
+						</dl>
+						<p>
+							{(!personalFunding &&
+								"Check personal funding amounts before saving.") ||
+								result.error ||
+								(result.balance === 0
+									? "✓ Every dollar has a place."
+									: "Adjust your plan until this amount is zero.")}
+						</p>
+					</div>
+					<div className="plan-save">
+						<div className="plan-mobile-balance">
+							Left to allocate<strong>{draftMoney(result.balance)}</strong>
 						</div>
-						<div className="total">
-							<dt>Left to allocate</dt>
-							<dd>{draftMoney(result.balance)}</dd>
+						<div className="plan-save-controls">
+							<button
+								type="submit"
+								disabled={
+									!active ||
+									saving ||
+									!result.canSave ||
+									fundingStale ||
+									!personalFunding
+								}
+							>
+								{saving ? "Saving…" : "Save budget"}
+							</button>
+							<output>{savedNotice}</output>
 						</div>
-					</dl>
-					<p>
-						{(!personalFunding &&
-							"Check personal funding amounts before saving.") ||
-							result.error ||
-							(result.balance === 0
-								? "✓ Every dollar has a place."
-								: "Adjust your plan until this amount is zero.")}
-					</p>
-					<button
-						type="submit"
-						disabled={
-							!active ||
-							saving ||
-							!result.canSave ||
-							fundingStale ||
-							!personalFunding
-						}
-					>
-						{saving ? "Saving…" : "Save budget"}
-					</button>
+					</div>
 				</aside>
 			</form>
-			<div className="button-row">
-				{data.plan && (
+			{data.plan && (
+				<section>
+					<p className="muted">
+						Opening a new month starts it with the latest earlier budget. Use
+						Copy limits to start next month now from this month’s saved values,
+						if there’s no budget for that month yet.
+					</p>
 					<button
 						type="button"
 						className="secondary"
@@ -316,8 +339,8 @@ export function PlanView({
 					>
 						Copy limits to {nextMonth(month)}
 					</button>
-				)}
-			</div>
+				</section>
+			)}
 		</>
 	);
 }
