@@ -1,5 +1,6 @@
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import ConvexProvider from "../integrations/convex/provider";
+import { errorMessage } from "../lib/error-message";
 import appCss from "../styles.css?url";
 export const Route = createRootRoute({
 	head: () => ({
@@ -25,7 +26,7 @@ export const Route = createRootRoute({
 		<main className="auth-card">
 			<h1>We could not load this page</h1>
 			<p role="alert">
-				{error instanceof Error ? error.message : "Please try again."}
+				{errorMessage(error, "Check your connection, then select Try again.")}
 			</p>
 			<button type="button" onClick={reset}>
 				Try again

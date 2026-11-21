@@ -55,7 +55,10 @@ export async function save(
 	if (error) throw new ConvexError(error);
 	if (args.id) {
 		const existing = all.find((category) => category._id === args.id);
-		if (!existing) throw new ConvexError("Category not found.");
+		if (!existing)
+			throw new ConvexError(
+				"This category no longer exists. It may have been deleted in another tab or by your partner.",
+			);
 		assertNotMerging(existing);
 		assertRevision(existing.revision, args.revision ?? -1);
 		await ctx.db.patch(args.id, {
@@ -76,7 +79,9 @@ export async function save(
 
 function assertNotMerging(category: Doc<"categories">) {
 	if (category.mergingInto)
-		throw new ConvexError("This category is being deleted.");
+		throw new ConvexError(
+			"This category is being deleted. Choose a different category, or wait a moment and reload.",
+		);
 }
 
 export async function validateCategory(
@@ -148,7 +153,9 @@ export async function remove(
 		.withIndex("by_space", (q) => q.eq("spaceId", category.spaceId))
 		.collect();
 	if (categories.some((row) => row.mergingInto === args.id))
-		throw new ConvexError("Wait for the other category deletion to finish.");
+		throw new ConvexError(
+			"Wait for the other category deletion to finish, then try again.",
+		);
 	await ctx.db.patch(args.id, { mergingInto: args.replacementId });
 	await continueReplacement(ctx, { id: args.id, phase: "plans", cursor: null });
 }

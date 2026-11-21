@@ -801,7 +801,7 @@ test("a delayed save cannot overwrite a newer plan and can recover in the editor
 	}
 	await expect(
 		bob.getByRole("alert").filter({
-			hasText: "This record changed. Reload its current values before saving.",
+			hasText: "This changed while you were editing",
 		}),
 	).toBeVisible();
 	await expect(bob.getByLabel("Groceries", { exact: true })).toHaveValue(

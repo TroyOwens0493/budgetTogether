@@ -78,7 +78,10 @@ export const rename = mutation({
 	args: { id: v.id("accounts"), name: v.string(), revision: v.number() },
 	handler: async (ctx, args) => {
 		const account = await ctx.db.get(args.id);
-		if (!account) throw new ConvexError("Account not found.");
+		if (!account)
+			throw new ConvexError(
+				"This account no longer exists. It may have been disconnected in another tab.",
+			);
 		await access(ctx, account.spaceId);
 		assertRevision(account.revision, args.revision);
 		await ctx.db.patch(args.id, {
@@ -144,7 +147,10 @@ export const saveOptions = mutation({
 	},
 	handler: async (ctx, args) => {
 		const account = await ctx.db.get(args.id);
-		if (!account) throw new ConvexError("Account not found.");
+		if (!account)
+			throw new ConvexError(
+				"This account no longer exists. It may have been disconnected in another tab.",
+			);
 		await access(ctx, account.spaceId);
 		assertRevision(account.revision, args.revision);
 		const name = label(args.name);

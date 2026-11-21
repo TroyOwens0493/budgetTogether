@@ -446,7 +446,7 @@ test("category deletion rewrites one bounded batch at a time, including newly ap
 			id: oldEntry,
 			revision: visible.revision,
 		}),
-		/This record changed/,
+		/This changed while you were editing/,
 	);
 	// Seed a backdated row after advancing the transaction cursor to exercise the scan itself.
 	entries.push(

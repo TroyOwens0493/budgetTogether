@@ -41,17 +41,20 @@ export function holdingForecastErrors(holding: Holding): string[] {
 	if (holdingReturn(holding) === undefined)
 		errors.push(
 			holding.type === "cd"
-				? "enter the CD's annual yield."
+				? "Enter the CD's annual yield in Edit forecast."
 				: !holding.ticker
-					? "enter an annual return override. No trading symbol is available for historical returns."
-					: "enter an annual return or load historical returns.",
+					? "Enter an annual return override in Edit forecast. This holding has no trading symbol, so historical returns can't be loaded."
+					: (holding.history?.error ??
+						"Select Load historical returns, or enter an annual return override in Edit forecast."),
 		);
 	if (
 		holding.balance === undefined ||
 		holding.currency !== "USD" ||
 		holding.balance < 0
 	)
-		errors.push("a nonnegative USD value is required.");
+		errors.push(
+			"This holding needs a current value in US dollars of zero or more. Sync the account, or exclude the holding in Edit forecast.",
+		);
 	return errors;
 }
 
@@ -85,7 +88,7 @@ export function prepareProjection(data: ProjectionData) {
 				account.balance < 0
 			)
 				errors.push(
-					`${name}: a nonnegative USD cash balance is required. Sync the account or exclude it.`,
+					`${name}: Your bank didn't report a usable cash balance in US dollars. Sync the account in Accounts & settings, or uncheck it under Cash savings accounts.`,
 				);
 			else cash += account.balance;
 			continue;
@@ -100,7 +103,7 @@ export function prepareProjection(data: ProjectionData) {
 				Math.abs(total - account.balance) > 100
 			)
 				errors.push(
-					`${name}: reported holdings do not match the account balance. Sync the account or exclude it until its data is complete.`,
+					`${name}: The holdings your bank reported don't add up to the account balance. Sync the account in Accounts & settings, or uncheck it until the data is complete.`,
 				);
 		}
 		for (const holding of account.holdings) {

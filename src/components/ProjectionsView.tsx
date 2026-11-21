@@ -9,6 +9,7 @@ import { HoldingEditor, ProjectionSettingsEditor } from "./ProjectionEditors";
 import {
 	type Holding,
 	holdingForecastErrors,
+	holdingReturn,
 	type InvestmentAccount,
 	prepareProjection,
 } from "./projection-data";
@@ -315,9 +316,12 @@ export function ProjectionsView({
 								<div className="projection-holding" key={holding._id}>
 									<div>
 										<strong>{holding.name}</strong>
-										{holding.history?.error && (
-											<small className="over">{holding.history.error}</small>
-										)}
+										{holding.history?.error &&
+											["stock", "etf", "mutualFund"].includes(holding.type) &&
+											holding.annualReturnOverride === undefined &&
+											holdingReturn(holding) !== undefined && (
+												<small className="over">{holding.history.error}</small>
+											)}
 										{!account.projectionCashExcluded &&
 											holdingForecastErrors(holding).map((error) => (
 												<small className="over" key={error}>

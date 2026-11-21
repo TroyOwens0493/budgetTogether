@@ -138,7 +138,8 @@ export function FundsView({
 							)}
 							{fund.balance < 0 && (
 								<p className="over" role="alert">
-									Linked payments exceed the money reserved for this fund.
+									Linked payments are more than this fund has saved. Check the
+									linked payments, or save more toward this fund.
 								</p>
 							)}
 						</article>

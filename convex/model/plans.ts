@@ -110,10 +110,17 @@ export async function save(
 		funds.carry,
 		fundPlan.total,
 	);
-	if (balance !== 0)
+	if (balance !== 0) {
+		const amount = new Intl.NumberFormat("en-US", {
+			style: "currency",
+			currency: "USD",
+		}).format(Math.abs(balance) / 100);
 		throw new ConvexError(
-			`The plan must balance. ${balance} cents remain to allocate.`,
+			balance > 0
+				? `${amount} is left to allocate. Assign it to a category or your savings target, then save.`
+				: `This plan allocates ${amount} more than the money available to plan. Lower a category or your savings target, then save.`,
 		);
+	}
 	const value = {
 		spaceId: args.spaceId,
 		month: args.month,
@@ -146,7 +153,10 @@ export async function repeat(ctx: MutationCtx, args: MonthArgs) {
 			q.eq("spaceId", args.spaceId).eq("month", destination),
 		)
 		.unique();
-	if (existing) throw new ConvexError("The next month already has a plan.");
+	if (existing)
+		throw new ConvexError(
+			"Next month already has a budget. Open it to make changes there.",
+		);
 	await ctx.db.insert("plans", {
 		spaceId: args.spaceId,
 		month: destination,

@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { connectionStatus } from "../src/domain/bank-connection";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
@@ -39,7 +40,9 @@ export const connection = internalQuery({
 	handler: async (ctx, args) => {
 		const connection = await ctx.db.get(args.id);
 		if (!connection || (args.userId && connection.userId !== args.userId))
-			throw new ConvexError("Connection not found.");
+			throw new ConvexError(
+				"This bank connection no longer exists. It may have been disconnected in another tab.",
+			);
 		return connection;
 	},
 });
@@ -254,7 +257,9 @@ export const review = query({
 		const current = await user(ctx);
 		const c = await ctx.db.get(id);
 		if (!c || c.userId !== current._id)
-			throw new ConvexError("Connection not found.");
+			throw new ConvexError(
+				"This bank connection no longer exists. It may have been disconnected in another tab.",
+			);
 		if (c.status !== "review") return null;
 		return Promise.all(
 			(c.pendingAccounts ?? []).map(async (a) => ({
@@ -283,7 +288,9 @@ export const confirmAccounts = mutation({
 		const current = await user(ctx);
 		const c = await ctx.db.get(args.id);
 		if (!c || c.userId !== current._id || c.status !== "review")
-			throw new ConvexError("This connection is not awaiting review.");
+			throw new ConvexError(
+				"These accounts were already reviewed. Close this and check your bank connections.",
+			);
 		const space = await privateSpace(ctx, current._id);
 		let added = 0;
 		for (const a of c.pendingAccounts ?? []) {
@@ -370,7 +377,8 @@ export const sync = action({
 		});
 		if (refreshed.status === "stale" || refreshed.status === "reconnect")
 			throw new ConvexError(
-				"Bank sync failed. Your imported history is retained. Check the connection status.",
+				connectionStatus(refreshed.status, refreshed.error ?? "SYNC_FAILED")
+					.problem as string,
 			);
 	},
 });

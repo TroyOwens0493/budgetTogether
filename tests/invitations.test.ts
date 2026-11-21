@@ -119,7 +119,7 @@ test("a new recipient signs up, reviews, and explicitly accepts to create an emp
 	assert.equal((await db.get(invitation))?.status, "accepted");
 	await assert.rejects(
 		() => invoke(sharing.accept, db, { token: "first-link" }),
-		/invalid/,
+		/already accepted this invitation/,
 	);
 	assert.equal(shared(db).length, 1);
 });
@@ -133,7 +133,7 @@ test("invites require the matching email and do not expose sender details to ano
 	});
 	await assert.rejects(
 		() => invoke(sharing.accept, db, { token: "first-link" }),
-		/another email/,
+		/different email address/,
 	);
 	assert.equal(shared(db).length, 0);
 });
@@ -149,7 +149,7 @@ test("one pending invite is allowed and only its sender can cancel or resend it"
 	assert.equal(await invoke(sharing.outgoing, db, {}), null);
 	await assert.rejects(
 		() => invoke(sharing.revoke, db, { id: invitation }),
-		/not found/,
+		/no longer exists/,
 	);
 	await assert.rejects(
 		() =>
@@ -170,7 +170,7 @@ test("one pending invite is allowed and only its sender can cancel or resend it"
 	});
 	await assert.rejects(
 		() => invoke(sharing.accept, db, { token: "first-link" }),
-		/invalid/,
+		/expired, was canceled, or was sent to a different email/,
 	);
 });
 
@@ -245,7 +245,7 @@ test("accepting an incoming invite cancels the recipient's outgoing invite", asy
 	db.current = "charlie";
 	await assert.rejects(
 		() => invoke(sharing.accept, db, { token: "bob-to-charlie" }),
-		/invalid/,
+		/expired, was canceled, or was sent to a different email/,
 	);
 });
 
@@ -386,7 +386,7 @@ test("self-invites and missing email configuration do not create invitations", a
 	delete process.env.RESEND_API_KEY;
 	await assert.rejects(
 		() => invoke(sharing.invite, db, { email: "bob@example.com" }),
-		/not configured/,
+		/can't be sent right now/,
 	);
 	assert.equal(await invoke(sharing.outgoing, db, {}), null);
 	assert.equal(db.scheduled.length, 0);

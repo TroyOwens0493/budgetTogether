@@ -39,7 +39,9 @@ export function useAlerts({ spaceId, month, run }: Omit<ViewProps, "active">) {
 		),
 		dialog: alertOpen && (
 			<Modal title="Your alerts" onClose={() => setAlertOpen(false)}>
-				{!alerts?.length ? (
+				{alerts === undefined ? (
+					<p aria-live="polite">Loading alerts…</p>
+				) : !alerts.length ? (
 					<p>No category alerts this month.</p>
 				) : (
 					alerts.map((x) => (

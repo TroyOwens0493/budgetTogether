@@ -3,6 +3,7 @@ import { ArrowLeftRight, TrendingUp } from "lucide-react";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { errorMessage } from "../lib/error-message";
 import { CategoryEditor } from "./CategoryEditor";
 import { SpendingChart } from "./SpendingChart";
 import { Summary } from "./Summary";
@@ -208,10 +209,8 @@ export function OverviewView({
 							<strong>{usd(-x.amount)}</strong>
 						</div>
 					))}
-				{!data.entries.length && (
-					<p className="empty-state">
-						Connect an account to see your activity here.
-					</p>
+				{!data.entries.some((x) => !x.removed) && (
+					<p className="empty-state">No transactions this month yet.</p>
 				)}
 			</section>
 			{Boolean(recurring?.some((x) => x.status !== "dismissed")) && (
@@ -241,7 +240,14 @@ export function OverviewView({
 												spaceId,
 												merchant: x.merchant,
 												status: "confirmed",
-											}).catch((e) => setError(e.message))
+											}).catch((e) =>
+												setError(
+													errorMessage(
+														e,
+														"We couldn't update this recurring charge. Check your connection and try again.",
+													),
+												),
+											)
 										}
 									>
 										Confirm
@@ -255,7 +261,14 @@ export function OverviewView({
 												spaceId,
 												merchant: x.merchant,
 												status: "dismissed",
-											}).catch((e) => setError(e.message))
+											}).catch((e) =>
+												setError(
+													errorMessage(
+														e,
+														"We couldn't update this recurring charge. Check your connection and try again.",
+													),
+												),
+											)
 										}
 									>
 										Dismiss

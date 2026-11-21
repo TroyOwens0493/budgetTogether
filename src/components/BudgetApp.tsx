@@ -124,7 +124,12 @@ function BudgetAppContent({ home }: { home: Home }) {
 			setNotice(success);
 			return true;
 		} catch (e) {
-			setError(errorMessage(e, "The request failed. Try again."));
+			setError(
+				errorMessage(
+					e,
+					"That didn't go through. Check your connection and try again.",
+				),
+			);
 			return false;
 		} finally {
 			setBusy(false);
@@ -134,7 +139,12 @@ function BudgetAppContent({ home }: { home: Home }) {
 	useEffect(() => {
 		if (space.active)
 			void ensureMonth({ spaceId: space._id, month }).catch((e) =>
-				setError(errorMessage(e, "The request failed. Try again.")),
+				setError(
+					errorMessage(
+						e,
+						"We couldn't open this month. Check your connection and reload the page.",
+					),
+				),
 			);
 	}, [space._id, space.active, month, ensureMonth]);
 	const props = { spaceId: space._id, month, active: space.active, run };

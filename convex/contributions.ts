@@ -208,7 +208,9 @@ export const confirm = mutation({
 				x.pairs.some((p) => p.outId === args.outId || p.inId === args.inId),
 			)
 		)
-			throw new ConvexError("An entry is already matched to a contribution.");
+			throw new ConvexError(
+				"One of these entries is already matched to a contribution. Remove that match first, then try again.",
+			);
 		const old = rows.find((x) => x.privateId === args.privateId);
 		const pair = {
 			outId: args.outId,
@@ -246,7 +248,10 @@ export const unmatch = mutation({
 	},
 	handler: async (ctx, args) => {
 		const c = await ctx.db.get(args.id);
-		if (!c) throw new ConvexError("Contribution not found.");
+		if (!c)
+			throw new ConvexError(
+				"This contribution match no longer exists. It may have been removed in another tab or by your partner.",
+			);
 		const { fundedByShared } = await contributionAccess(
 			ctx,
 			c.privateId,

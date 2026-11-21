@@ -193,7 +193,7 @@ test("the server rejects bypassed automatic funding and stale fund amounts witho
 				revision: 0,
 				fundSignature: old.signature,
 			}),
-		/must balance/,
+		/left to allocate|more than the money available to plan/,
 	);
 	await saveMonth(db, privateId, month, categoryId);
 	await invoke(budgets.saveFund, db, {

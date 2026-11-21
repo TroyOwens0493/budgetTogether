@@ -143,11 +143,11 @@ test("a fund without a trading symbol requests an override and exclusion removes
 	});
 	let data = await invoke(projections.list, db, { spaceId: privateId });
 	assert.deepEqual(prepareProjection(data).errors, [
-		"Public fund: enter an annual return override. No trading symbol is available for historical returns.",
+		"Public fund: Enter an annual return override in Edit forecast. This holding has no trading symbol, so historical returns can't be loaded.",
 	]);
 	const holding = data.accounts.flatMap((account) => account.holdings)[0];
 	assert.deepEqual(holdingForecastErrors(holding), [
-		"enter an annual return override. No trading symbol is available for historical returns.",
+		"Enter an annual return override in Edit forecast. This holding has no trading symbol, so historical returns can't be loaded.",
 	]);
 	assert.deepEqual(
 		holdingForecastErrors({ ...holding, annualReturnOverride: 0 }),
@@ -533,22 +533,36 @@ test("forecast errors hide provider details and simplify previously saved messag
 	for (const [error, expected] of [
 		[
 			"Tiingo has no price history for this symbol. Check its symbol or enter a return.",
-			"No historical prices found.",
+			"No price history was found for this symbol. Enter an annual return override in Edit forecast.",
 		],
 		[
 			"Tiingo has no adjusted price history for this symbol. Check its symbol or enter a return.",
-			"No historical prices found.",
+			"No price history was found for this symbol. Enter an annual return override in Edit forecast.",
 		],
-		["No historical prices are available.", "No historical prices found."],
+		[
+			"No historical prices are available.",
+			"No price history was found for this symbol. Enter an annual return override in Edit forecast.",
+		],
 		[
 			"Tiingo's request limit was reached.",
-			"Historical return can't be calculated.",
+			"The historical return lookup limit was reached. Try again later, or enter an annual return override in Edit forecast.",
+		],
+		[
+			"Historical returns need a Tiingo API token. Set up Tiingo or enter your own annual return.",
+			"Historical returns aren't set up in this app yet. Enter an annual return override in Edit forecast.",
+		],
+		[
+			"Tiingo returned invalid price history. Try again later or enter a return.",
+			"Historical returns couldn't be loaded right now. Select Load historical returns to try again later, or enter an annual return override in Edit forecast.",
 		],
 		[
 			"At least one year of historical prices is required.",
-			"Historical return can't be calculated.",
+			"This symbol has less than a year of price history. Enter an annual return override in Edit forecast.",
 		],
-		["private-provider-details", "Historical return can't be calculated."],
+		[
+			"private-provider-details",
+			"Historical returns couldn't be loaded right now. Select Load historical returns to try again later, or enter an annual return override in Edit forecast.",
+		],
 		[undefined, undefined],
 	]) {
 		await db.patch(historyId, { error });
@@ -556,7 +570,10 @@ test("forecast errors hide provider details and simplify previously saved messag
 		const entry = result.accounts.flatMap((account) => account.holdings)[0];
 		assert.equal(entry.history?.error, expected);
 		assert.equal(entry.history?.rate, 5);
-		assert.equal(entry.problem, "This investment type is unsupported.");
+		assert.equal(
+			entry.problem,
+			"Forecasts don't support this investment type. Exclude it in Edit forecast.",
+		);
 	}
 });
 
@@ -939,7 +956,7 @@ test("bank sync routes Investments through holdings, retains failed imports, and
 		failing = true;
 		await assert.rejects(
 			() => invoke(bank.sync, db, { id: connectionId }),
-			/sync failed/,
+			/sign in again/,
 		);
 		assert.equal((await db.get(connectionId))?.status, "reconnect");
 		assert.equal(
@@ -952,7 +969,7 @@ test("bank sync routes Investments through holdings, retains failed imports, and
 		await invoke(budgets.setup, db, { name: "Bob", timeZone: "UTC" });
 		await assert.rejects(
 			() => invoke(bank.sync, db, { id: connectionId }),
-			/not found/,
+			/no longer exists/,
 		);
 	} finally {
 		for (const [name, value] of Object.entries({
@@ -977,7 +994,7 @@ test("loaded historical prices feed budget-funded forecasts through the return c
 		prepareProjection(
 			await invoke(projections.list, db, { spaceId: privateId }),
 		).errors.join(" "),
-		/load historical returns/,
+		/Load historical returns/,
 	);
 	const previous = process.env.TIINGO_API_TOKEN;
 	process.env.TIINGO_API_TOKEN = "test-key";

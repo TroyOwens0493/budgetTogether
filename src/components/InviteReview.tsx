@@ -47,7 +47,12 @@ export function InviteReview({
 			},
 			(error) => {
 				if (!closed)
-					setError(errorMessage(error, "Could not load this invitation."));
+					setError(
+						errorMessage(
+							error,
+							"We couldn't load this invitation. Check your connection, then select Try again.",
+						),
+					);
 			},
 		);
 		return () => {
@@ -64,7 +69,12 @@ export function InviteReview({
 			clearInviteLink();
 			onAccepted(spaceId);
 		} catch (error) {
-			setError(errorMessage(error, "Could not accept this invitation."));
+			setError(
+				errorMessage(
+					error,
+					"We couldn't accept this invitation. Check your connection and try again.",
+				),
+			);
 		} finally {
 			inFlight.current = false;
 			setBusy(false);
@@ -122,7 +132,12 @@ export function InviteReview({
 								await authClient.signOut();
 								window.location.reload();
 							} catch (error) {
-								setError(errorMessage(error, "Could not sign out."));
+								setError(
+									errorMessage(
+										error,
+										"We couldn't sign you out. Check your connection and try again.",
+									),
+								);
 								setBusy(false);
 							}
 						}}

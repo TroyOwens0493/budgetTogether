@@ -102,7 +102,7 @@ export async function alerts(
 		items.push({
 			key: `${args.spaceId}:${args.month}:carry`,
 			severity: "invalid" as const,
-			text: "Corrected transactions made carry-forward invalid.",
+			text: "This month's available savings no longer cover what was carried forward. Check this month's transactions, savings target, and fund amounts.",
 			read: false,
 		});
 	return items;
@@ -114,7 +114,9 @@ export async function readAlert(
 ) {
 	const { current } = await access(ctx, args.spaceId);
 	if (!args.key.startsWith(`${args.spaceId}:`))
-		throw new ConvexError("Invalid alert.");
+		throw new ConvexError(
+			"This alert is out of date. Reload the page to see current alerts.",
+		);
 	const rows = await ctx.db
 		.query("alertReads")
 		.withIndex("by_user", (q) => q.eq("userId", current._id))

@@ -95,9 +95,7 @@ test("send, review and accept creates a shared budget for both sessions with def
 	await alice
 		.getByRole("button", { name: "Send invitation", exact: true })
 		.click();
-	await expect(
-		alice.getByText("Invitation email sent. Expires", { exact: false }),
-	).toBeVisible();
+	await expect(alice.getByText(/^Expires /)).toBeVisible();
 	await expect(
 		alice.getByRole("button", { name: "Shared", exact: true }),
 	).toHaveCount(0);
