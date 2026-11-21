@@ -45,14 +45,20 @@ export const list = query({
 			.filter((q) => q.eq(q.field("sharedId"), args.sharedId))
 			.unique();
 		if (!canEdit) return { contribution, suggestions: [], canEdit };
-		const personal = await ctx.db
-			.query("transactions")
-			.withIndex("by_space_date", (q) => q.eq("spaceId", args.privateId))
-			.collect();
-		const sharedEntries = await ctx.db
-			.query("transactions")
-			.withIndex("by_space_date", (q) => q.eq("spaceId", args.sharedId))
-			.collect();
+		// Bank and manual dates use YYYY-MM-DD. An exclusive day 32 bounds
+		// the entire month even at the ends of the four-digit year range.
+		const monthEntries = (spaceId: Id<"spaces">) =>
+			ctx.db
+				.query("transactions")
+				.withIndex("by_space_date", (q) =>
+					q
+						.eq("spaceId", spaceId)
+						.gte("date", `${args.month}-01`)
+						.lt("date", `${args.month}-32`),
+				)
+				.collect();
+		const personal = await monthEntries(args.privateId);
+		const sharedEntries = await monthEntries(args.sharedId);
 		const all = [
 			...(await ctx.db
 				.query("contributions")
@@ -70,7 +76,6 @@ export const list = query({
 					!x.removed &&
 					!x.pending &&
 					x.amount > 0 &&
-					x.date.startsWith(args.month) &&
 					!used.has(x._id) &&
 					(x.kind === "transfer" || x.suggestedKind === "transfer"),
 			)
@@ -82,7 +87,6 @@ export const list = query({
 							!entry.pending &&
 							!used.has(entry._id) &&
 							entry.amount === -out.amount &&
-							entry.date.startsWith(args.month) &&
 							Math.abs(Date.parse(entry.date) - Date.parse(out.date)) <=
 								3 * 86400000,
 					)

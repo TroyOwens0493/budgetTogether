@@ -14,9 +14,16 @@ export async function recurring(
 	args: { spaceId: Id<"spaces"> },
 ) {
 	await access(ctx, args.spaceId);
+	// Three purchases can span at most 70 days. A 180-day lookback keeps
+	// active monthly patterns even if the last charge was several cycles ago.
+	const earliest = new Date(Date.now() - 180 * 86_400_000)
+		.toISOString()
+		.slice(0, 10);
 	const entries = await ctx.db
 		.query("transactions")
-		.withIndex("by_space_date", (q) => q.eq("spaceId", args.spaceId))
+		.withIndex("by_space_date", (q) =>
+			q.eq("spaceId", args.spaceId).gte("date", earliest),
+		)
 		.collect();
 	const states = await ctx.db
 		.query("recurring")
@@ -65,7 +72,10 @@ export async function alerts(
 		.withIndex("by_user", (q) => q.eq("userId", current._id))
 		.collect();
 	const items = [];
-	for (const x of plan?.limits ?? []) {
+	for (const x of replaceLimits(
+		plan?.limits ?? [],
+		space.categoryReplacement,
+	)) {
 		const spent = result.categories[x.categoryId] ?? 0;
 		if (spent > x.amount || (x.amount > 0 && spent >= x.amount * 0.8)) {
 			const severity = spent > x.amount ? "over" : "near";

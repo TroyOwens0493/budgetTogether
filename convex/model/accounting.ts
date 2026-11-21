@@ -114,16 +114,15 @@ export async function results(
 		for (const person of await recipients(ctx, spaceId, m)) {
 			const privateEntries = await ctx.db
 				.query("transactions")
-				.withIndex("by_space_date", (q) =>
+				.withIndex("by_space_kind_date", (q) =>
 					q
 						.eq("spaceId", person.privateId)
+						.eq("kind", "income")
 						.gte("date", `${m}-01`)
 						.lt("date", `${nextMonth(m)}-01`),
 				)
 				.collect();
-			householdIncome += totals(
-				privateEntries.filter((x) => x.kind === "income"),
-			).income;
+			householdIncome += totals(privateEntries).income;
 		}
 	}
 	const result = totals(counted, funds.actualIncoming, funds.actualOutgoing);

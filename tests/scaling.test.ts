@@ -5,6 +5,7 @@ import * as accounts from "../convex/accounts.ts";
 import * as bank from "../convex/bank.ts";
 import { SYNC_BATCH_SIZE } from "../convex/bankTypes.ts";
 import * as budgets from "../convex/budgets.ts";
+import * as contributions from "../convex/contributions.ts";
 import { encrypt, type PlaidTransaction } from "../convex/plaidClient.ts";
 import { validateSplits } from "../src/domain/budget.ts";
 import {
@@ -51,6 +52,204 @@ test("account labels probe only moved accounts and require actual history", asyn
 			["by_space_account_date", "first", 1],
 			["by_space_account_date", "first", 0],
 		],
+	);
+});
+
+test("recurring detection reads recent history and retains active suggestions and status", async (t) => {
+	t.mock.timers.enable({
+		apis: ["Date"],
+		now: new Date("2026-09-30T12:00:00Z"),
+	});
+	const { db, privateId, accountId, categoryId } = await fixture();
+	for (const [description, dates] of [
+		["Active", ["2024-01-01", "2026-06-18", "2026-07-23", "2026-08-27"]],
+		["Inactive", ["2025-01-01", "2025-02-01", "2025-03-01"]],
+	] as const)
+		for (const date of dates) {
+			const id = await entry(
+				db,
+				privateId,
+				accountId,
+				1000,
+				"purchase",
+				categoryId,
+				date,
+			);
+			await db.patch(id, { description });
+		}
+	await invoke(budgets.setRecurring, db, {
+		spaceId: privateId,
+		merchant: "active",
+		status: "confirmed",
+	});
+	db.reads = [];
+	assert.deepEqual(
+		await invoke(budgets.recurring, db, { spaceId: privateId }),
+		[
+			{
+				merchant: "active",
+				amount: 1000,
+				date: "2026-09-27",
+				status: "confirmed",
+			},
+		],
+	);
+	assert.deepEqual(
+		db.reads.filter((x) => x.table === "transactions").map((x) => x.rows),
+		[3],
+	);
+});
+
+test("legacy contribution suggestions only read the selected month in both budgets", async () => {
+	const { db, privateId, accountId } = await fixture();
+	const sharedId = await sharedBudget(db);
+	const membership = [...db.rows.values()].find(
+		(x) => x.spaceId === sharedId && x.userId === "alice",
+	);
+	assert.ok(membership);
+	await db.patch(membership._id, {
+		joinedAt: Date.parse("2026-10-01T12:00:00Z"),
+	});
+	const sharedAccount = await connectedAccount(db, sharedId);
+	for (const date of ["2024-09-01", "2026-08-31", "2026-10-01"]) {
+		await entry(db, privateId, accountId, 1000, "transfer", undefined, date);
+		await entry(
+			db,
+			sharedId,
+			sharedAccount,
+			-1000,
+			"transfer",
+			undefined,
+			date,
+		);
+	}
+	const outId = await entry(
+		db,
+		privateId,
+		accountId,
+		1000,
+		"transfer",
+		undefined,
+		"2026-09-01",
+	);
+	const inId = await entry(
+		db,
+		sharedId,
+		sharedAccount,
+		-1000,
+		"transfer",
+		undefined,
+		"2026-09-02",
+	);
+	db.reads = [];
+	const result = await invoke(contributions.list, db, {
+		privateId,
+		sharedId,
+		month: "2026-09",
+	});
+	assert.deepEqual(
+		result.suggestions.map((x) => [x.outId, x.inId]),
+		[[outId, inId]],
+	);
+	assert.deepEqual(
+		db.reads.filter((x) => x.table === "transactions").map((x) => x.rows),
+		[1, 1],
+	);
+});
+
+test("shared monthly results read private income without scanning private spending", async () => {
+	const { db, privateId, accountId, categoryId } = await fixture();
+	const sharedId = await sharedBudget(db);
+	const membership = [...db.rows.values()].find(
+		(x) => x.spaceId === sharedId && x.userId === "alice",
+	);
+	assert.ok(membership);
+	await db.patch(membership._id, {
+		joinedAt: Date.parse("2026-09-01T12:00:00Z"),
+	});
+	const sharedAccount = await connectedAccount(db, sharedId);
+	await entry(db, sharedId, sharedAccount, 500, "purchase");
+	await entry(db, privateId, accountId, -1000, "income");
+	const pending = await entry(db, privateId, accountId, -500, "income");
+	await db.patch(pending, { pending: true });
+	await entry(
+		db,
+		privateId,
+		accountId,
+		-3000,
+		"income",
+		undefined,
+		"2026-08-31",
+	);
+	for (let i = 0; i < 120; i++)
+		await entry(db, privateId, accountId, 600, "purchase", categoryId);
+	db.reads = [];
+	const result = await invoke(budgets.dashboard, db, {
+		spaceId: sharedId,
+		month: "2026-09",
+	});
+	assert.equal(result.income, 1000);
+	assert.equal(result.savings, 500);
+	assert.equal(result.entries.length, 1);
+	assert.deepEqual(
+		db.reads
+			.filter((x) => x.table === "transactions")
+			.map((x) => [x.index, x.rows]),
+		[
+			["by_space_date", 1],
+			["by_space_kind_date", 2],
+		],
+	);
+});
+
+test("fund balances skip nonposted rows and retain backdated bank corrections", async () => {
+	const { db, privateId, accountId, categoryId } = await fixture();
+	const fundId = await invoke(budgets.saveFund, db, {
+		spaceId: privateId,
+		startMonth: "2026-08",
+		effectiveMonth: "2026-08",
+		openingBalance: 10000,
+		name: "Insurance",
+		targetAmount: 10000,
+		targetMonth: "2027-01",
+		revision: 0,
+	});
+	for (const [date, amount, pending, removed] of [
+		["2026-07-30", 2000, false, false],
+		["2026-09-01", -500, false, false],
+		["2026-09-02", 1000, true, false],
+		["2026-09-03", 1000, false, true],
+		["2026-10-01", 1000, false, false],
+	] as const) {
+		const id = await entry(
+			db,
+			privateId,
+			accountId,
+			amount,
+			"purchase",
+			categoryId,
+			date,
+		);
+		await db.patch(id, {
+			source: "plaid",
+			funded: true,
+			pending,
+			removed,
+			splits: [{ categoryId, fundId, amount }],
+		});
+	}
+	db.reads = [];
+	const result = await invoke(budgets.funds, db, {
+		spaceId: privateId,
+		month: "2026-09",
+	});
+	assert.equal(result.items[0].balanceBeforeMonth, 8000);
+	assert.equal(result.items[0].balance, 8500);
+	assert.deepEqual(
+		db.reads
+			.filter((x) => x.table === "transactions")
+			.map((x) => [x.index, x.rows]),
+		[["by_space_funded_posted_date", 2]],
 	);
 });
 

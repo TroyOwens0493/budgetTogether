@@ -283,7 +283,15 @@ export default defineSchema({
 	})
 		.index("by_space_date", ["spaceId", "date"])
 		.index("by_space_account_date", ["spaceId", "accountId", "date"])
-		.index("by_space_funded_date", ["spaceId", "funded", "date"])
+		.index("by_space_kind_date", ["spaceId", "kind", "date"])
+		.index("by_space_funded_posted_date", [
+			"spaceId",
+			"funded",
+			"kind",
+			"pending",
+			"removed",
+			"date",
+		])
 		.index("by_classification", [
 			"source",
 			"classificationStatus",
