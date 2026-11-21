@@ -52,7 +52,7 @@ const holdingProblems: Record<string, string> = {
 function historicalPriceError(error: string | undefined) {
 	if (!error) return error;
 	if (/no (?:adjusted )?price history|no historical prices/i.test(error))
-		return "No price history was found for this symbol. Check the trading symbol, or enter an annual return override in Edit forecast.";
+		return "No price history was found for this symbol. Enter an annual return override in Edit forecast.";
 	if (/at least one year/i.test(error))
 		return "This symbol has less than a year of price history. Enter an annual return override in Edit forecast.";
 	if (/API token|authorize/i.test(error))

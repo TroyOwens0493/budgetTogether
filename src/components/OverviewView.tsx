@@ -209,11 +209,8 @@ export function OverviewView({
 							<strong>{usd(-x.amount)}</strong>
 						</div>
 					))}
-				{!data.entries.length && (
-					<p className="empty-state">
-						No transactions this month. Connect a bank in Accounts &amp;
-						settings, or add a transaction.
-					</p>
+				{!data.entries.some((x) => !x.removed) && (
+					<p className="empty-state">No transactions this month yet.</p>
 				)}
 			</section>
 			{Boolean(recurring?.some((x) => x.status !== "dismissed")) && (

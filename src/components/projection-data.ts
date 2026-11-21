@@ -53,7 +53,7 @@ export function holdingForecastErrors(holding: Holding): string[] {
 		holding.balance < 0
 	)
 		errors.push(
-			"This holding needs a current value in US dollars of zero or more. Sync the account, update the value in Edit forecast, or exclude the holding.",
+			"This holding needs a current value in US dollars of zero or more. Sync the account, or exclude the holding in Edit forecast.",
 		);
 	return errors;
 }

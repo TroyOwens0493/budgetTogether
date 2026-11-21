@@ -102,7 +102,7 @@ export async function alerts(
 		items.push({
 			key: `${args.spaceId}:${args.month}:carry`,
 			severity: "invalid" as const,
-			text: "Corrected transactions reduced this month's savings below what was carried forward. Lower next month's carry-forward.",
+			text: "More was carried forward from this month than its savings above target. Check this month's transactions and savings target.",
 			read: false,
 		});
 	return items;

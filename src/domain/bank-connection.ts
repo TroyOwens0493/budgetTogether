@@ -35,7 +35,7 @@ const problems: Record<string, string> = {
 	RATE_LIMIT_EXCEEDED:
 		"Too many import requests were sent. Wait a few minutes, then select Sync.",
 	INSTITUTION_NO_LONGER_SUPPORTED:
-		"This bank no longer supports automatic imports. Disconnect it and add transactions manually.",
+		"This bank no longer supports automatic imports. Disconnect it to stop import attempts.",
 	NO_ACCOUNTS:
 		"Your bank didn't return any accounts for this login. Select Reconnect and choose an account.",
 };

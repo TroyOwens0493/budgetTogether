@@ -147,6 +147,13 @@ export async function accept(ctx: MutationCtx, tokenHash: string) {
 	const current = await user(ctx);
 	const invite = await byHash(ctx, tokenHash);
 	if (
+		invite?.status === "accepted" &&
+		invite.email === current.email.trim().toLowerCase()
+	)
+		throw new ConvexError(
+			"You already accepted this invitation. Select Continue to my budget.",
+		);
+	if (
 		!invite ||
 		invite.status !== "pending" ||
 		invite.expiresAt <= Date.now() ||

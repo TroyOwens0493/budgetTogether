@@ -533,15 +533,15 @@ test("forecast errors hide provider details and simplify previously saved messag
 	for (const [error, expected] of [
 		[
 			"Tiingo has no price history for this symbol. Check its symbol or enter a return.",
-			"No price history was found for this symbol. Check the trading symbol, or enter an annual return override in Edit forecast.",
+			"No price history was found for this symbol. Enter an annual return override in Edit forecast.",
 		],
 		[
 			"Tiingo has no adjusted price history for this symbol. Check its symbol or enter a return.",
-			"No price history was found for this symbol. Check the trading symbol, or enter an annual return override in Edit forecast.",
+			"No price history was found for this symbol. Enter an annual return override in Edit forecast.",
 		],
 		[
 			"No historical prices are available.",
-			"No price history was found for this symbol. Check the trading symbol, or enter an annual return override in Edit forecast.",
+			"No price history was found for this symbol. Enter an annual return override in Edit forecast.",
 		],
 		[
 			"Tiingo's request limit was reached.",

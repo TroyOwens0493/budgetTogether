@@ -119,7 +119,7 @@ test("a new recipient signs up, reviews, and explicitly accepts to create an emp
 	assert.equal((await db.get(invitation))?.status, "accepted");
 	await assert.rejects(
 		() => invoke(sharing.accept, db, { token: "first-link" }),
-		/expired, was canceled, or was sent to a different email/,
+		/already accepted this invitation/,
 	);
 	assert.equal(shared(db).length, 1);
 });

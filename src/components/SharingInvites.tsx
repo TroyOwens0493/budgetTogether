@@ -45,7 +45,7 @@ export function SharingInvites({ email, run }: { email: string; run: Run }) {
 						className={outgoing.delivery === "failed" ? "over" : undefined}
 					>
 						{outgoing.delivery === "failed"
-							? "The invitation email couldn't be sent. Check the address, then select Resend invitation."
+							? "The invitation email couldn't be sent. If the address is right, select Resend invitation. If it's wrong, cancel this invitation and send a new one."
 							: outgoing.delivery === "sent"
 								? "Invitation email sent."
 								: "Invitation email queued."}

@@ -15,7 +15,7 @@ export class PlaidError extends ConvexError<string> {
 function unavailable(detail: string): never {
 	console.error(detail);
 	throw new ConvexError(
-		"Bank connections aren't available right now. Try again later, or add transactions manually.",
+		"Bank connections aren't available right now. Try again later.",
 	);
 }
 export async function plaid<T>(
@@ -61,7 +61,12 @@ async function encryptionKey() {
 		unavailable(
 			"Configure PLAID_TOKEN_ENCRYPTION_KEY with a base64 32-byte key.",
 		);
-	const raw = bytes(value);
+	let raw: ReturnType<typeof bytes>;
+	try {
+		raw = bytes(value);
+	} catch {
+		unavailable("PLAID_TOKEN_ENCRYPTION_KEY is not valid base64.");
+	}
 	if (raw.length !== 32)
 		unavailable("The Plaid encryption key must contain 32 bytes.");
 	return crypto.subtle.importKey("raw", raw, "AES-GCM", false, [

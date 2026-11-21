@@ -117,8 +117,8 @@ export async function save(
 		}).format(Math.abs(balance) / 100);
 		throw new ConvexError(
 			balance > 0
-				? `${amount} of income isn't assigned yet. Add it to a category or your savings target, then save.`
-				: `This plan assigns ${amount} more than your income. Lower a category or your savings target, then save.`,
+				? `${amount} is left to allocate. Assign it to a category or your savings target, then save.`
+				: `This plan allocates ${amount} more than the money available to plan. Lower a category or your savings target, then save.`,
 		);
 	}
 	const value = {
