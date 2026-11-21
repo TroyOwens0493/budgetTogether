@@ -55,12 +55,6 @@ export default defineSchema({
 		type: v.union(v.literal("private"), v.literal("shared")),
 		ownerId: v.string(),
 		timeZone: v.string(),
-		categoryReplacement: v.optional(
-			v.object({
-				categoryId: v.id("categories"),
-				replacementId: v.id("categories"),
-			}),
-		),
 	}),
 	memberships: defineTable({
 		spaceId: v.id("spaces"),
@@ -218,16 +212,6 @@ export default defineSchema({
 	})
 		.index("by_space", ["spaceId"])
 		.index("by_space_name", ["spaceId", "name"]),
-	categoryReplacements: defineTable({
-		spaceId: v.id("spaces"),
-		phase: v.union(
-			v.literal("transactions"),
-			v.literal("plans"),
-			v.literal("carry"),
-		),
-		cursor: v.union(v.string(), v.null()),
-		step: v.number(),
-	}),
 	funds: defineTable({
 		spaceId: v.id("spaces"),
 		startMonth: v.string(),
@@ -297,7 +281,6 @@ export default defineSchema({
 		edited: v.boolean(),
 		reconciledWith: v.optional(v.id("transactions")),
 	})
-		.index("by_space", ["spaceId"])
 		.index("by_space_date", ["spaceId", "date"])
 		.index("by_space_account_date", ["spaceId", "accountId", "date"])
 		.index("by_space_kind_date", ["spaceId", "kind", "date"])

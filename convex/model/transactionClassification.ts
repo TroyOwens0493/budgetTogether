@@ -14,15 +14,11 @@ export async function queue(ctx: MutationCtx, id: Id<"transactions">) {
 	await ctx.scheduler.runAfter(0, internal.classification.classify, { id });
 }
 async function categoriesFor(ctx: MutationCtx, spaceId: Id<"spaces">) {
-	const replacing = (await ctx.db.get(spaceId))?.categoryReplacement
-		?.categoryId;
 	const rows = await ctx.db
 		.query("categories")
 		.withIndex("by_space", (q) => q.eq("spaceId", spaceId))
-		.take(replacing ? 256 : 255);
+		.take(255);
 	return rows
-		.filter((row) => row._id !== replacing)
-		.slice(0, 255)
 		.map((row) => ({ id: String(row._id), name: row.name }))
 		.sort((a, b) => a.id.localeCompare(b.id));
 }

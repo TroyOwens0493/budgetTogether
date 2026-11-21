@@ -12,7 +12,6 @@ import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import { access } from "../access";
 import { funding, results } from "./accounting";
-import { replaceCarry, replaceLimits } from "./categories";
 import { summary as fundSummary, sameAllocations } from "./funds";
 import { saveWithPlan, sharedForPersonal } from "./personalFunding";
 import { planState } from "./reporting";
@@ -55,10 +54,7 @@ export async function save(
 				"Set fund amounts in Funds, not in spending limits.",
 			);
 		const category = await ctx.db.get(limit.categoryId);
-		if (
-			category?.spaceId !== args.spaceId ||
-			limit.categoryId === space.categoryReplacement?.categoryId
-		)
+		if (category?.spaceId !== args.spaceId)
 			throw new ConvexError("Every category must belong to this budget.");
 	}
 	if (args.personalFunding) {
@@ -150,7 +146,7 @@ export async function repeat(ctx: MutationCtx, args: MonthArgs) {
 			? 0
 			: old.expectedIncome,
 		savingsTarget: old.savingsTarget,
-		limits: replaceLimits(old.limits, space.categoryReplacement),
+		limits: old.limits,
 		saved: false,
 		reviewed: false,
 		revision: 1,
@@ -204,8 +200,7 @@ export async function review(
 	for (const x of args.allocations)
 		if (
 			x.categoryId &&
-			(x.categoryId === space.categoryReplacement?.categoryId ||
-				(await ctx.db.get(x.categoryId))?.spaceId !== args.spaceId)
+			(await ctx.db.get(x.categoryId))?.spaceId !== args.spaceId
 		)
 			throw new ConvexError("Choose categories from this budget.");
 	const destinationMonth = nextMonth(args.month);
@@ -229,13 +224,9 @@ export async function review(
 	};
 	let savingsTarget = base.savingsTarget;
 	const limits = new Map<Id<"categories">, number>(
-		replaceLimits(base.limits, space.categoryReplacement).map((x) => [
-			x.categoryId,
-			x.amount,
-		]),
+		base.limits.map((x) => [x.categoryId, x.amount]),
 	);
-	for (const row of previous) {
-		const x = replaceCarry(row, space.categoryReplacement);
+	for (const x of previous) {
 		if (x.categoryId)
 			limits.set(x.categoryId, (limits.get(x.categoryId) ?? 0) - x.amount);
 		else savingsTarget -= x.amount;
@@ -307,7 +298,7 @@ export async function ensure(ctx: MutationCtx, args: MonthArgs) {
 			? 0
 			: previous.expectedIncome,
 		savingsTarget: previous.savingsTarget,
-		limits: replaceLimits(previous.limits, space.categoryReplacement),
+		limits: previous.limits,
 		saved: false,
 		reviewed: false,
 		revision: 1,
