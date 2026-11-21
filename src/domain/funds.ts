@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import { money, month } from "./budget";
 
 export type FundSchedule = {
@@ -25,12 +26,15 @@ export type FundPayment = { fundId: string; month: string; amount: number };
 
 function monthNumber(value: string) {
 	const [year, m] = month(value).split("-").map(Number);
-	if (year < 1) throw new Error("Choose a month between 0001-01 and 9999-12.");
+	if (year < 1)
+		throw new ConvexError("Choose a month between 0001-01 and 9999-12.");
 	return year * 12 + m - 1;
 }
 function fromMonthNumber(value: number): string {
 	if (value < 12 || value >= 120000)
-		throw new Error("The next payment falls outside the supported dates.");
+		throw new ConvexError(
+			"The next payment falls outside the supported dates.",
+		);
 	return `${String(Math.floor(value / 12)).padStart(4, "0")}-${String((value % 12) + 1).padStart(2, "0")}`;
 }
 
@@ -41,15 +45,19 @@ export function validateFundSchedule(
 	monthNumber(startMonth);
 	monthNumber(schedule.effectiveMonth);
 	if (schedule.effectiveMonth < startMonth)
-		throw new Error("Changes cannot start before the fund's start month.");
+		throw new ConvexError(
+			"Changes cannot start before the fund's start month.",
+		);
 	if (!schedule.name.trim() || schedule.name.trim().length > 100)
-		throw new Error("Enter a fund name with 1 to 100 characters.");
+		throw new ConvexError("Enter a fund name with 1 to 100 characters.");
 	if (money(schedule.targetAmount, true) === 0)
-		throw new Error("The target amount must be greater than zero.");
+		throw new ConvexError("The target amount must be greater than zero.");
 	if (schedule.targetMonth) {
 		monthNumber(schedule.targetMonth);
 		if (schedule.targetMonth < schedule.effectiveMonth)
-			throw new Error("The target month cannot be before the change month.");
+			throw new ConvexError(
+				"The target month cannot be before the change month.",
+			);
 	}
 	if (schedule.intervalMonths !== undefined) {
 		if (
@@ -59,14 +67,16 @@ export function validateFundSchedule(
 			!schedule.targetMonth ||
 			schedule.monthlyAmount !== undefined
 		)
-			throw new Error(
+			throw new ConvexError(
 				"Choose a next payment month and an interval of 2 to 120 months.",
 			);
 	} else if (!schedule.targetMonth) {
 		if (money(schedule.monthlyAmount ?? 0, true) === 0)
-			throw new Error("Choose a target month or a positive monthly amount.");
+			throw new ConvexError(
+				"Choose a target month or a positive monthly amount.",
+			);
 	} else if (schedule.monthlyAmount !== undefined)
-		throw new Error("Choose either a target month or a monthly amount.");
+		throw new ConvexError("Choose either a target month or a monthly amount.");
 }
 
 /** Dates include the target month. Saved allocations, rather than assumed

@@ -1,4 +1,5 @@
 import { ConvexError, v } from "convex/values";
+import { connectionStatus } from "../src/domain/bank-connection";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import {
@@ -370,7 +371,8 @@ export const sync = action({
 		});
 		if (refreshed.status === "stale" || refreshed.status === "reconnect")
 			throw new ConvexError(
-				"Bank sync failed. Your imported history is retained. Check the connection status.",
+				connectionStatus(refreshed.status, refreshed.error ?? "SYNC_FAILED")
+					.problem as string,
 			);
 	},
 });

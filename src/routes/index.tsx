@@ -6,6 +6,7 @@ import { Auth } from "../components/Auth";
 import { BudgetApp } from "../components/BudgetApp";
 import { ValidatedInput } from "../components/ValidatedInput";
 import { labelError, timeZoneError } from "../domain/validation";
+import { errorMessage } from "../lib/error-message";
 export const Route = createFileRoute("/")({ component: Home });
 function Home() {
 	const { isAuthenticated, isLoading } = useConvexAuth();
@@ -32,7 +33,12 @@ function Account() {
 				timeZone: String(data.get("timeZone")),
 			});
 		} catch (e) {
-			setError(e instanceof Error ? e.message : "Setup failed.");
+			setError(
+				errorMessage(
+					e,
+					"We couldn't finish setting up your account. Check your connection and try again.",
+				),
+			);
 		} finally {
 			setBusy(false);
 		}

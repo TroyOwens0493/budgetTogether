@@ -1,7 +1,8 @@
+import { ConvexError } from "convex/values";
 /** Money is stored as integer US cents. Plaid amounts are positive for outflows. */
 export function cents(value: string): number {
 	if (!/^-?\d+(\.\d{1,2})?$/.test(value.trim()))
-		throw new Error("Enter an amount with at most two decimal places.");
+		throw new ConvexError("Enter an amount with at most two decimal places.");
 	const [whole, fraction = ""] = value.trim().replace("-", "").split(".");
 	return money(
 		(value.trim().startsWith("-") ? -1 : 1) *
@@ -9,13 +10,17 @@ export function cents(value: string): number {
 	);
 }
 export function money(value: number, nonnegative = false): number {
-	if (!Number.isSafeInteger(value) || (nonnegative && value < 0))
-		throw new Error("Amounts must be whole cents and cannot be negative here.");
+	if (!Number.isSafeInteger(value))
+		throw new ConvexError(
+			"Enter a valid amount with at most two decimal places.",
+		);
+	if (nonnegative && value < 0)
+		throw new ConvexError("Enter zero or a positive amount.");
 	return value;
 }
 export function month(value: string): string {
 	if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(value))
-		throw new Error("Use a valid month in YYYY-MM format.");
+		throw new ConvexError("Choose a valid month.");
 	return value;
 }
 export function nextMonth(value: string): string {
@@ -51,7 +56,7 @@ export function planBalance(
 	])
 		money(value, true);
 	if (new Set(plan.limits.map((x) => x.categoryId)).size !== plan.limits.length)
-		throw new Error("Each category can have only one limit.");
+		throw new ConvexError("Each category can have only one limit.");
 	return money(
 		plan.expectedIncome +
 			incoming +
@@ -81,8 +86,8 @@ export function validateSplits(amount: number, splits: Entry["splits"]): void {
 		) ||
 		splits.reduce((sum, x) => sum + x.amount, 0) !== amount
 	)
-		throw new Error(
-			"Split amounts must have the same sign and total the transaction amount.",
+		throw new ConvexError(
+			"Split amounts must add up to the transaction amount, and each split must be a charge or a refund to match it.",
 		);
 }
 export function totals(entries: Entry[], incoming = 0, outgoing = 0) {
@@ -123,8 +128,8 @@ export function leftovers(
 }
 export function assertRevision(actual: number, expected: number): void {
 	if (actual !== expected)
-		throw new Error(
-			"This record changed. Reload its current values before saving.",
+		throw new ConvexError(
+			"This changed while you were editing, possibly in another tab or by your partner. Load the latest version, then make your change again.",
 		);
 }
 export function recurring(

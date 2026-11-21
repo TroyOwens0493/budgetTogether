@@ -1,11 +1,22 @@
+import { ConvexError } from "convex/values";
 import { money } from "../src/domain/budget";
 
-export class PlaidError extends Error {
+/** A failed Plaid request. Users see the message; sync status stores the code. */
+export class PlaidError extends ConvexError<string> {
 	code: string;
 	constructor(code: string) {
-		super(code);
+		super(
+			"Your bank connection request didn't go through. Try again in a few minutes.",
+		);
 		this.code = code;
 	}
+}
+/** Log setup details for operators and show users a message they can act on. */
+function unavailable(detail: string): never {
+	console.error(detail);
+	throw new ConvexError(
+		"Bank connections aren't available right now. Try again later, or add transactions manually.",
+	);
 }
 export async function plaid<T>(
 	path: string,
@@ -14,17 +25,23 @@ export async function plaid<T>(
 	const client_id = process.env.PLAID_CLIENT_ID;
 	const secret = process.env.PLAID_SECRET;
 	if (!client_id || !secret)
-		throw new Error("Configure PLAID_CLIENT_ID and PLAID_SECRET in Convex.");
+		unavailable("Configure PLAID_CLIENT_ID and PLAID_SECRET in Convex.");
 	// This branch is explicitly configured for Sandbox. Production requires a separate rollout.
-	const response = await fetch(`https://sandbox.plaid.com${path}`, {
-		method: "POST",
-		headers: {
-			"Content-Type": "application/json",
-			"Plaid-Version": "2020-09-14",
-		},
-		body: JSON.stringify({ ...body, client_id, secret }),
-	});
-	const result = await response.json();
+	let response: Response;
+	let result: { error_code?: string };
+	try {
+		response = await fetch(`https://sandbox.plaid.com${path}`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+				"Plaid-Version": "2020-09-14",
+			},
+			body: JSON.stringify({ ...body, client_id, secret }),
+		});
+		result = await response.json();
+	} catch {
+		throw new PlaidError("PLAID_REQUEST_FAILED");
+	}
 	if (!response.ok)
 		throw new PlaidError(result.error_code ?? "PLAID_REQUEST_FAILED");
 	return result as T;
@@ -41,12 +58,12 @@ function base64(value: ArrayBuffer | Uint8Array) {
 async function encryptionKey() {
 	const value = process.env.PLAID_TOKEN_ENCRYPTION_KEY;
 	if (!value)
-		throw new Error(
+		unavailable(
 			"Configure PLAID_TOKEN_ENCRYPTION_KEY with a base64 32-byte key.",
 		);
 	const raw = bytes(value);
 	if (raw.length !== 32)
-		throw new Error("The Plaid encryption key must contain 32 bytes.");
+		unavailable("The Plaid encryption key must contain 32 bytes.");
 	return crypto.subtle.importKey("raw", raw, "AES-GCM", false, [
 		"encrypt",
 		"decrypt",

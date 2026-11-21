@@ -396,7 +396,7 @@ test("missing returns block forecasts and compound returns track the saved budge
 			.click();
 		await expect(
 			page.getByText(
-				"Test fund: enter an annual return or load historical returns.",
+				"Test fund: Select Load historical returns, or enter an annual return override in Edit forecast.",
 			),
 		).toBeVisible();
 		await expect(page.locator(".projection-investments")).toHaveCount(0);

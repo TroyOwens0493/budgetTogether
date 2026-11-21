@@ -386,7 +386,7 @@ test("self-invites and missing email configuration do not create invitations", a
 	delete process.env.RESEND_API_KEY;
 	await assert.rejects(
 		() => invoke(sharing.invite, db, { email: "bob@example.com" }),
-		/not configured/,
+		/can't be sent right now/,
 	);
 	assert.equal(await invoke(sharing.outgoing, db, {}), null);
 	assert.equal(db.scheduled.length, 0);

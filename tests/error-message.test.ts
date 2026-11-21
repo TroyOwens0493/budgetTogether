@@ -21,6 +21,16 @@ test("Convex errors without displayable text use the fallback", () => {
 		assert.equal(errorMessage(new ConvexError(data), fallback), fallback);
 });
 
+test("hidden server errors use the fallback instead of diagnostics", () => {
+	for (const message of [
+		"[CONVEX M(budgets:savePlan)] [Request ID: 1a2b] Server Error",
+		"[CONVEX Q(projections:list)] [Request ID: 1a2b] Server Error\n  Called by client",
+		"[CONVEX A(bank:sync)] Uncaught Error: Configure PLAID_CLIENT_ID",
+		"",
+	])
+		assert.equal(errorMessage(new Error(message), fallback), fallback);
+});
+
 test("local validation errors keep their message and unknown failures use the fallback", () => {
 	assert.equal(
 		errorMessage(new Error("Enter a percentage, such as 5.25."), fallback),

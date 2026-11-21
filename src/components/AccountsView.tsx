@@ -3,6 +3,7 @@ import type { FunctionReturnType } from "convex/server";
 import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { connectionStatus } from "../domain/bank-connection";
 import { openPlaid } from "../lib/plaid-link";
 import { AccountOptions } from "./AccountOptions";
 import { ContributionsView } from "./ContributionsView";
@@ -103,66 +104,69 @@ export function AccountsView({
 			</section>
 			<section className="panel">
 				<h2>Your bank connections</h2>
-				{connections?.map((c) => (
-					<div className="connection-row" key={c._id}>
-						<div>
-							<strong>{c.institution}</strong>
-							<small>
-								{c.status} · Last successful import:{" "}
-								{c.lastSync ? new Date(c.lastSync).toLocaleString() : "Not yet"}
-							</small>
-							{c.error && (
-								<p className="over">{c.error}. Imported history is retained.</p>
-							)}
-						</div>
-						<div className="button-row">
-							{c.status === "review" && (
-								<button type="button" onClick={() => setReviewing(c._id)}>
-									Review accounts
+				{connections?.map((c) => {
+					const state = connectionStatus(c.status, c.error);
+					return (
+						<div className="connection-row" key={c._id}>
+							<div>
+								<strong>{c.institution}</strong>
+								<small>
+									{state.label} · Last successful import:{" "}
+									{c.lastSync
+										? new Date(c.lastSync).toLocaleString()
+										: "Not yet"}
+								</small>
+								{state.problem && <p className="over">{state.problem}</p>}
+							</div>
+							<div className="button-row">
+								{c.status === "review" && (
+									<button type="button" onClick={() => setReviewing(c._id)}>
+										Review accounts
+									</button>
+								)}
+								<button
+									type="button"
+									className="secondary"
+									disabled={["disconnected", "review", "discarding"].includes(
+										c.status,
+									)}
+									onClick={() =>
+										run(
+											() => sync({ id: c._id }),
+											"Sync requested. Check the connection status below.",
+										)
+									}
+								>
+									Sync
 								</button>
-							)}
-							<button
-								type="button"
-								className="secondary"
-								disabled={["disconnected", "review", "discarding"].includes(
-									c.status,
-								)}
-								onClick={() =>
-									run(
-										() => sync({ id: c._id }),
-										"Sync requested. Check the connection status below.",
-									)
-								}
-							>
-								Sync
-							</button>
-							<button
-								type="button"
-								className="secondary"
-								disabled={["disconnected", "review", "discarding"].includes(
-									c.status,
-								)}
-								onClick={() =>
-									run(async () => {
-										const token = await link({ connectionId: c._id });
-										await openPlaid(token, async () => {}, true);
-										await sync({ id: c._id });
-									}, "Reconnection completed.")
-								}
-							>
-								Reconnect
-							</button>
-							<button
-								type="button"
-								className="text-button"
-								disabled={c.status === "disconnected"}
-								onClick={() => setDisconnecting(c._id)}
-							>
-								Disconnect
-							</button>
+								<button
+									type="button"
+									className="secondary"
+									disabled={["disconnected", "review", "discarding"].includes(
+										c.status,
+									)}
+									onClick={() =>
+										run(async () => {
+											const token = await link({ connectionId: c._id });
+											await openPlaid(token, async () => {}, true);
+											await sync({ id: c._id });
+										}, "Reconnection completed.")
+									}
+								>
+									Reconnect
+								</button>
+								<button
+									type="button"
+									className="text-button"
+									disabled={c.status === "disconnected"}
+									onClick={() => setDisconnecting(c._id)}
+								>
+									Disconnect
+								</button>
+							</div>
 						</div>
-					</div>
-				))}
+					);
+				})}
 				{!connections?.length && <p>No bank connections yet.</p>}
 			</section>
 			{space.type === "private" && !hasSharedBudget && (

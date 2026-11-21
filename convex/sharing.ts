@@ -62,7 +62,7 @@ function requireEmailSetup() {
 		!process.env.SITE_URL
 	)
 		throw new ConvexError(
-			"Invitation emails are not configured yet. Please try again later.",
+			"Invitations can't be sent right now. Try again later.",
 		);
 }
 

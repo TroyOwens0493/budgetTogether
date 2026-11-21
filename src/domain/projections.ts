@@ -1,3 +1,4 @@
+import { ConvexError } from "convex/values";
 import { money } from "./budget";
 
 export type ProjectionAsset = {
@@ -43,7 +44,7 @@ export function forecastHorizon(currentAge: number, targetAge: number) {
 		targetAge <= currentAge ||
 		targetAge - currentAge > 100
 	)
-		throw new Error(
+		throw new ConvexError(
 			"Enter whole ages from 0 to 120, with a future age at most 100 years ahead.",
 		);
 	return (targetAge - currentAge) * 12;
@@ -52,11 +53,13 @@ export function forecastHorizon(currentAge: number, targetAge: number) {
 export function validateFixedIncome(value: FixedIncome, startsOn: string) {
 	calendarDate(value.maturityDate);
 	if (value.maturityDate <= calendarDate(startsOn))
-		throw new Error("Update this matured holding before making a forecast.");
+		throw new ConvexError(
+			"This bond or CD has already matured. Update its maturity date or exclude it from the forecast.",
+		);
 	if (value.kind === "cd")
 		return { ...value, faceValue: 0, couponRate: 0, paymentsPerYear: 12 };
 	if (value.faceValue === undefined || value.faceValue <= 0)
-		throw new Error("Enter the bond's total face value.");
+		throw new ConvexError("Enter the bond's total face value.");
 	money(value.faceValue, true);
 	if (
 		value.couponRate === undefined ||
@@ -64,7 +67,7 @@ export function validateFixedIncome(value: FixedIncome, startsOn: string) {
 		value.couponRate < 0 ||
 		value.couponRate > 100
 	)
-		throw new Error("Enter a bond coupon rate from 0% to 100%.");
+		throw new ConvexError("Enter a bond coupon rate from 0% to 100%.");
 	if (value.couponRate === 0)
 		return {
 			...value,
@@ -77,7 +80,7 @@ export function validateFixedIncome(value: FixedIncome, startsOn: string) {
 		![1, 2, 4, 12].includes(value.paymentsPerYear ?? 0) ||
 		!value.nextPaymentDate
 	)
-		throw new Error(
+		throw new ConvexError(
 			"Enter the bond's payment frequency and next payment date.",
 		);
 	calendarDate(value.nextPaymentDate);
@@ -85,8 +88,8 @@ export function validateFixedIncome(value: FixedIncome, startsOn: string) {
 		value.nextPaymentDate <= startsOn ||
 		value.nextPaymentDate > value.maturityDate
 	)
-		throw new Error(
-			"The next coupon date must be after today and no later than maturity.",
+		throw new ConvexError(
+			"The next coupon payment date must be after today and on or before the maturity date.",
 		);
 	return {
 		...value,
@@ -108,7 +111,9 @@ export type ProjectionPoint = {
 
 export function annualReturn(value: number): number {
 	if (!Number.isFinite(value) || value <= -100 || value > 1000)
-		throw new Error("Enter an annual return above -100% and at most 1,000%.");
+		throw new ConvexError(
+			"Enter an annual return above -100% and at most 1,000%.",
+		);
 	return value;
 }
 
@@ -130,12 +135,12 @@ export function project({
 	startsOn?: string;
 }): ProjectionPoint[] {
 	if (!Number.isInteger(months) || months < 1 || months > 1200)
-		throw new Error("Choose a forecast between 1 and 1,200 months.");
+		throw new ConvexError("Choose a forecast between 1 and 1,200 months.");
 	if (
 		investments.some((asset) => !asset.id || asset.id === "__proto__") ||
 		new Set(investments.map((asset) => asset.id)).size !== investments.length
 	)
-		throw new Error("Each investment must have a unique identifier.");
+		throw new ConvexError("Each investment must have a unique identifier.");
 	const inputs = [cash, ...investments];
 	for (const asset of inputs) {
 		money(asset.balance, true);
@@ -143,10 +148,12 @@ export function project({
 		annualReturn(asset.annualReturn);
 		if ("fixedIncome" in asset && asset.fixedIncome) {
 			if (!startsOn)
-				throw new Error("A forecast start date is required for bonds and CDs.");
+				throw new ConvexError(
+					"A forecast start date is required for bonds and CDs.",
+				);
 			validateFixedIncome(asset.fixedIncome, startsOn);
 			if (asset.monthlyContribution !== 0)
-				throw new Error(
+				throw new ConvexError(
 					"Add a new holding for additional bond or CD purchases.",
 				);
 		}
@@ -240,7 +247,7 @@ function dateTime(value: string): number {
 		!Number.isFinite(time) ||
 		new Date(time).toISOString().slice(0, 10) !== value
 	)
-		throw new Error("Historical prices must have valid calendar dates.");
+		throw new ConvexError("Historical prices must have valid calendar dates.");
 	return time;
 }
 
@@ -251,21 +258,23 @@ export function historicalReturn(
 	asOf: string,
 ) {
 	if (!Number.isInteger(years) || years < 1 || years > 100)
-		throw new Error("Choose a historical period between 1 and 100 years.");
+		throw new ConvexError(
+			"Choose a historical period between 1 and 100 years.",
+		);
 	const endLimit = dateTime(asOf);
 	const sorted = prices
 		.map((point) => {
 			const time = dateTime(point.date);
 			if (!Number.isFinite(point.adjustedClose) || point.adjustedClose <= 0)
-				throw new Error("Historical adjusted prices must be positive.");
+				throw new ConvexError("Historical adjusted prices must be positive.");
 			return { ...point, time };
 		})
 		.filter((point) => point.time <= endLimit)
 		.sort((a, b) => a.time - b.time);
 	if (new Set(sorted.map((point) => point.date)).size !== sorted.length)
-		throw new Error("Historical prices contain duplicate dates.");
+		throw new ConvexError("Historical prices contain duplicate dates.");
 	const end = sorted.at(-1);
-	if (!end) throw new Error("No historical prices are available.");
+	if (!end) throw new ConvexError("No historical prices are available.");
 	const cutoff = new Date(end.time);
 	cutoff.setUTCFullYear(cutoff.getUTCFullYear() - years);
 	// Select a real observation on or before the requested anniversary. When
@@ -275,7 +284,9 @@ export function historicalReturn(
 		sorted[0];
 	const elapsedYears = (end.time - start.time) / (365.2425 * 86400000);
 	if (end.time - start.time < 365 * 86400000)
-		throw new Error("At least one year of historical prices is required.");
+		throw new ConvexError(
+			"At least one year of historical prices is required.",
+		);
 	const rate = annualReturn(
 		((end.adjustedClose / start.adjustedClose) ** (1 / elapsedYears) - 1) * 100,
 	);

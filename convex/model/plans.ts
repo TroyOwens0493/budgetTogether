@@ -110,10 +110,17 @@ export async function save(
 		funds.carry,
 		fundPlan.total,
 	);
-	if (balance !== 0)
+	if (balance !== 0) {
+		const amount = new Intl.NumberFormat("en-US", {
+			style: "currency",
+			currency: "USD",
+		}).format(Math.abs(balance) / 100);
 		throw new ConvexError(
-			`The plan must balance. ${balance} cents remain to allocate.`,
+			balance > 0
+				? `${amount} of income isn't assigned yet. Add it to a category or your savings target, then save.`
+				: `This plan assigns ${amount} more than your income. Lower a category or your savings target, then save.`,
 		);
+	}
 	const value = {
 		spaceId: args.spaceId,
 		month: args.month,

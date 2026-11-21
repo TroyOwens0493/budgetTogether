@@ -226,7 +226,7 @@ test("saving budgets rejects imbalance and stale edits", async () => {
 	};
 	await assert.rejects(
 		() => invoke(budgets.savePlan, db, { ...plan, savingsTarget: 2001 }),
-		/balance/,
+		/isn't assigned yet|more than your income/,
 	);
 	assert.equal(
 		(
@@ -254,7 +254,7 @@ test("saving budgets rejects imbalance and stale edits", async () => {
 				revision: 1,
 				savingsTarget: 2001,
 			}),
-		/balance/,
+		/isn't assigned yet|more than your income/,
 	);
 	await assert.rejects(() => invoke(budgets.savePlan, db, plan), /changed/);
 });
@@ -637,7 +637,7 @@ test("manual entries are saved as posted, check split totals, and refuse deletio
 				revision: 1,
 				splits: [{ categoryId, amount: 999 }],
 			}),
-		/total/,
+		/add up to the transaction amount/,
 	);
 	await db.patch(transaction, { pending: true });
 	await invoke(budgets.saveTransaction, db, {
@@ -969,7 +969,7 @@ test("both partners can edit allocations without private access; outsiders and s
 				amount: -1,
 				revision: 1,
 			}),
-		/negative/,
+		/zero or a positive amount/,
 	);
 	db.current = "eve";
 	await assert.rejects(
@@ -1369,7 +1369,7 @@ test("shared budget saves commit personal funding atomically and reject stale or
 	const originalRows = new Map(db.rows);
 	await assert.rejects(
 		() => invoke(budgets.savePlan, db, { ...args, savingsTarget: 90000 }),
-		/must balance/,
+		/isn't assigned yet|more than your income/,
 	);
 	assert.deepEqual(
 		db.rows,
