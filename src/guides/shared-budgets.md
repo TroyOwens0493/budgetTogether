@@ -9,7 +9,7 @@ A partner is the other person in your shared budget. You both have equal control
 
 ## Invite your partner
 
-Open **Accounts & settings** in your private budget. Find **Start a shared budget**.
+Open **Accounts & sharing** in your private budget. Find **Start a shared budget**.
 
 ![The invitation form with a sample email and the Send invitation button highlighted.](/learn/shared-budgets/send-invitation.png "Inviting a partner")
 
@@ -62,14 +62,14 @@ Select **Personal** and open **Monthly budget** for the same month to use your a
 
 ## Find historical contributions
 
-Select **Personal**, choose the **Reporting month**, and open **Accounts & settings**. Look for a heading such as **Historical contributions for 2025-10**. If it appears, you can see the planned contribution and any **Confirmed contributions**. These older records track funding from your private budget to the shared budget. Confirmed amounts come from matched transfers. Some historical records are read-only.
+Select **Personal**, choose the **Reporting month**, and open **Accounts & sharing**. Look for a heading such as **Historical contributions for 2025-10**. If it appears, you can see the planned contribution and any **Confirmed contributions**. These older records track funding from your private budget to the shared budget. Confirmed amounts come from matched transfers. Some historical records are read-only.
 
 ## Leave a shared budget
 
 > [!NOTE]
 > Leaving permanently deletes the shared budget and all its records **for both people**. You cannot undo this. Accounts return to their owners’ private budgets. Each person keeps their private records and bank connections.
 
-Select **Shared**, open **Accounts & settings**, and select **Leave shared budget**.
+Select **Shared**, open **Accounts & sharing**, and select **Leave shared budget**.
 
 ![The Leave shared budget dialog and its permanent deletion warning for both people.](/learn/shared-budgets/leave-shared-budget.png "Confirming what happens when either partner leaves")
 

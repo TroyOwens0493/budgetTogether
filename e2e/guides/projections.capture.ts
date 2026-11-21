@@ -244,7 +244,7 @@ test("capture forecast setup, warnings, and results", async ({
 	await editBudget.click();
 	await expect(page.getByLabel("Reporting month")).toHaveValue(month);
 	await page
-		.getByRole("button", { name: "Accounts & settings", exact: true })
+		.getByRole("button", { name: "Accounts & sharing", exact: true })
 		.click();
 	const connection = page
 		.locator(".connection-row")

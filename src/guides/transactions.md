@@ -22,7 +22,7 @@ Select a transaction’s description or category to open **Transaction details**
 
 ## Add a manual transaction
 
-Select **Add transaction**. You’ll need an active account in this budget. If there are no accounts to choose from, open **Accounts & settings** to connect a bank.
+Select **Add transaction**. You’ll need an active account in this budget. If there are no accounts to choose from, open **Accounts & sharing** to connect a bank.
 
 ![The Add a transaction form filled out for a grocery receipt.](/learn/transactions/add-manual-entry.png "Record a grocery receipt")
 

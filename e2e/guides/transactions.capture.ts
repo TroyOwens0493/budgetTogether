@@ -80,7 +80,7 @@ test("capture finding, adding, editing, matching, and deleting transactions", as
 	await account.selectOption({ label: "Checking" });
 	await category.selectOption({ label: "Dining out" });
 	await expect(
-		list.getByText("No more transactions match these filters."),
+		list.getByText("No transactions match these filters."),
 	).toBeVisible();
 	await search.clear();
 	await expect(

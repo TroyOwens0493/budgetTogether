@@ -5,13 +5,13 @@ order: 42
 section: Accounts and sharing
 ---
 
-## Open Settings or sign out
+## Open Profile or sign out
 
 Look near the bottom of the menu. On a phone, tap **Open navigation** first.
 
-![The bottom of the menu with Settings and Sign out highlighted.](/learn/settings/settings-menu.png "Finding Settings and Sign out")
+![The bottom of the menu with Profile and Sign out highlighted.](/learn/settings/settings-menu.png "Finding Profile and Sign out")
 
-1. Select **Settings** to open your profile and password options.
+1. Select **Profile** to open your profile and password options.
 2. Select **Sign out** when you want to end your session.
 
 ## Edit your profile
@@ -27,7 +27,7 @@ You can see your sign-in address in the read-only **Email** field.
 
 ## Change your password
 
-In **Settings**, select **Change password**.
+In **Profile**, select **Change password**.
 
 ![The change password dialog with both password fields and Save password highlighted.](/learn/settings/change-password.png "Changing a password while signed in")
 

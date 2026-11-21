@@ -47,7 +47,7 @@ const test = base.extend<{
 async function openInvites(page: Page) {
 	await page.goto("/e2e/fixtures/index.html");
 	await page
-		.getByRole("button", { name: "Accounts & settings", exact: true })
+		.getByRole("button", { name: "Accounts & sharing", exact: true })
 		.click();
 	await expect(
 		page.getByRole("heading", { name: "Start a shared budget" }),
@@ -177,7 +177,7 @@ test("resend and cancel invalidate old links and a mismatched account cannot acc
 		.getByRole("button", { name: "Continue to my budget", exact: true })
 		.click();
 	await alice
-		.getByRole("button", { name: "Accounts & settings", exact: true })
+		.getByRole("button", { name: "Accounts & sharing", exact: true })
 		.click();
 	await alice
 		.getByRole("button", { name: "Cancel invitation", exact: true })
