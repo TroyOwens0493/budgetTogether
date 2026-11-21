@@ -1,5 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { getFunctionName } from "convex/server";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
+import type { MutationCtx } from "../../convex/_generated/server";
+import { access } from "../../convex/access";
 import * as accounts from "../../convex/accounts";
 import { authComponent } from "../../convex/auth";
 import * as budgets from "../../convex/budgets";
@@ -14,7 +17,43 @@ type Handler = {
 	_handler: (ctx: unknown, args: unknown) => Promise<unknown>;
 	isAction?: boolean;
 };
+
+export type GuideImport = Pick<
+	Doc<"transactions">,
+	| "description"
+	| "amount"
+	| "date"
+	| "kind"
+	| "pending"
+	| "splits"
+	| "classificationStatus"
+>;
+
+// Seed bank rows for guides without running a bank sync or a classification job.
+const seedGuideImports = {
+	async _handler(
+		ctx: MutationCtx,
+		args: { accountId: Id<"accounts">; entries: GuideImport[] },
+	) {
+		const account = await ctx.db.get(args.accountId);
+		if (!account) throw new Error("Missing guide account.");
+		await access(ctx, account.spaceId);
+		for (const entry of args.entries)
+			await ctx.db.insert("transactions", {
+				...entry,
+				spaceId: account.spaceId,
+				accountId: account._id,
+				source: "plaid",
+				note: "",
+				removed: false,
+				edited: false,
+				revision: 0,
+			});
+	},
+};
+
 const handlers = new Map<string, unknown>([
+	["fixture:seedGuideImports", seedGuideImports],
 	["budgets:home", budgets.home],
 	["budgets:setup", budgets.setup],
 	["budgets:dashboard", budgets.dashboard],
@@ -24,6 +63,8 @@ const handlers = new Map<string, unknown>([
 	["budgets:saveFund", budgets.saveFund],
 	["budgets:transactions", budgets.transactions],
 	["budgets:saveTransaction", budgets.saveTransaction],
+	["budgets:deleteTransaction", budgets.deleteTransaction],
+	["budgets:reconcile", budgets.reconcile],
 	["accounts:list", accounts.list],
 	["budgets:repeatPlan", budgets.repeatPlan],
 	["budgets:review", budgets.review],
@@ -31,6 +72,7 @@ const handlers = new Map<string, unknown>([
 	["budgets:readAlert", budgets.readAlert],
 	["budgets:reports", budgets.reports],
 	["budgets:recurring", budgets.recurring],
+	["budgets:setRecurring", budgets.setRecurring],
 	["budgets:transactions", budgets.transactions],
 	["budgets:categories", budgets.categories],
 	["budgets:saveCategory", budgets.saveCategory],
