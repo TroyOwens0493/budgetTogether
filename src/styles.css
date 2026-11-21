@@ -268,7 +268,7 @@ a.nav-item:hover {
 	padding: 0 38px 50px;
 	max-width: 1500px;
 	width: 100%;
-	margin: auto;
+	margin: 0 auto;
 }
 .topbar {
 	display: flex;
