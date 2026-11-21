@@ -1,5 +1,4 @@
 import { createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
-import ConvexProvider from "../integrations/convex/provider";
 import { errorMessage } from "../lib/error-message";
 import appCss from "../styles.css?url";
 export const Route = createRootRoute({
@@ -17,7 +16,7 @@ export const Route = createRootRoute({
 				<HeadContent />
 			</head>
 			<body>
-				<ConvexProvider>{children}</ConvexProvider>
+				{children}
 				<Scripts />
 			</body>
 		</html>

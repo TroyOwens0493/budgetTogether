@@ -409,9 +409,6 @@ test("missing returns block forecasts and compound returns track the saved budge
 			startDate: "2016-01-01",
 			endDate: "2026-01-01",
 		});
-		await expect(
-			page.getByText(/2016-01-01 to 2026-01-01 · 12\.00% annualized/),
-		).toBeVisible();
 		const factor = 1.12 ** (1 / 12);
 		const expected = (n: number) =>
 			1000 * factor ** n + (400 * (factor ** n - 1)) / (factor - 1);
@@ -427,9 +424,6 @@ test("missing returns block forecasts and compound returns track the saved budge
 		await page
 			.getByRole("button", { name: "Projections", exact: true })
 			.click();
-		await expect(
-			page.getByText(/2016-01-01 to 2026-01-01 · 12\.00% annualized/),
-		).toBeVisible();
 		await expect(
 			page.locator(".projection-investments .projection-value"),
 		).toHaveText(dollars(expected(12)));

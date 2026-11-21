@@ -12,6 +12,9 @@ pnpm exec playwright test --config e2e/tasks.config.ts
 Install the existing dependencies and Playwright Chromium first. The task tests
 need a free loopback port 3100. They need no `.env.local`, deployment, accounts,
 email service, or bank connection. They run with the existing Node 24+ requirement.
+Set `BUDGET_TASK_PORT` to use a different free port.
+
+For annotated Learn screenshots, see [Add a Learn guide](guides/README.md).
 
 Task tests use a separate Vite cache, `test-results-tasks/`, and
 `playwright-report-tasks/` so they can run beside the app and public-screen suite.
