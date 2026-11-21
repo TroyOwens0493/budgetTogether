@@ -3,6 +3,7 @@ import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx } from "../_generated/server";
 import type { PlaidTransaction } from "../plaidClient";
+import { resolveCategories } from "./categories";
 
 async function ignored(
 	ctx: MutationCtx,
@@ -116,11 +117,9 @@ export async function applyChanges(
 			continue;
 		}
 		const splits =
-			kind !== "purchase"
-				? []
-				: prior?.splits.length
-					? resizeSplits(prior.splits, amount)
-					: [];
+			kind === "purchase" && prior?.splits.length
+				? resizeSplits(await resolveCategories(ctx, prior.splits), amount)
+				: [];
 		const needsClassification =
 			!prior?.edited &&
 			(!prior?.classificationStatus ||

@@ -72,10 +72,7 @@ export async function alerts(
 		.withIndex("by_user", (q) => q.eq("userId", current._id))
 		.collect();
 	const items = [];
-	for (const x of replaceLimits(
-		plan?.limits ?? [],
-		space.categoryReplacement,
-	)) {
+	for (const x of plan?.limits ?? []) {
 		const spent = result.categories[x.categoryId] ?? 0;
 		if (spent > x.amount || (x.amount > 0 && spent >= x.amount * 0.8)) {
 			const severity = spent > x.amount ? "over" : "near";

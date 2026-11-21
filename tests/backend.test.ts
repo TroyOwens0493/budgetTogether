@@ -9,6 +9,7 @@ import * as sharing from "../convex/sharing.ts";
 import { fundingSignature } from "../src/domain/personal-funding-draft.ts";
 import {
 	connectedAccount,
+	drainCategoryBatches,
 	entry,
 	fixture,
 	id,
@@ -599,6 +600,7 @@ test("category deletion reassigns transactions and preserves the sum of plan lim
 		replacementId,
 		revision: 0,
 	});
+	await drainCategoryBatches(db);
 	const result = await invoke(budgets.dashboard, db, {
 		spaceId: privateId,
 		month: "2026-09",

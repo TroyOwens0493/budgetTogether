@@ -209,6 +209,7 @@ export default defineSchema({
 		color: v.string(),
 		order: v.number(),
 		revision: v.number(),
+		mergingInto: v.optional(v.id("categories")),
 	})
 		.index("by_space", ["spaceId"])
 		.index("by_space_name", ["spaceId", "name"]),
@@ -238,7 +239,9 @@ export default defineSchema({
 		status: v.optional(v.union(v.literal("draft"), v.literal("active"))),
 		reviewed: v.boolean(),
 		revision: v.number(),
-	}).index("by_month", ["spaceId", "month"]),
+	})
+		.index("by_month", ["spaceId", "month"])
+		.index("by_space", ["spaceId"]),
 	transactions: defineTable({
 		accountId: v.id("accounts"),
 		spaceId: v.id("spaces"),
@@ -281,6 +284,7 @@ export default defineSchema({
 		edited: v.boolean(),
 		reconciledWith: v.optional(v.id("transactions")),
 	})
+		.index("by_space", ["spaceId"])
 		.index("by_space_date", ["spaceId", "date"])
 		.index("by_space_account_date", ["spaceId", "accountId", "date"])
 		.index("by_space_kind_date", ["spaceId", "kind", "date"])

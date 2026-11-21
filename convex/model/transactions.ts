@@ -9,6 +9,7 @@ import {
 import type { Doc, Id } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { access, label } from "../access";
+import { resolveCategories, validateCategory } from "./categories";
 import { validatePayments } from "./funds";
 
 export async function list(
@@ -98,8 +99,7 @@ export async function save(
 		validateSplits(args.amount, args.splits);
 		await validatePayments(ctx, args.spaceId, args.date, args.splits);
 		for (const s of args.splits)
-			if ((await ctx.db.get(s.categoryId))?.spaceId !== args.spaceId)
-				throw new ConvexError("Choose categories from this budget.");
+			await validateCategory(ctx, args.spaceId, s.categoryId);
 	} else if (args.splits.length)
 		throw new ConvexError("Only purchases and refunds use category splits.");
 	// Contributions use transfers, with exclusion governed by a separate confirmed pair.
@@ -197,7 +197,8 @@ export async function reconcile(
 		);
 	await access(ctx, manual.spaceId);
 	assertRevision(manual.revision, args.revision);
-	await validatePayments(ctx, manual.spaceId, imported.date, manual.splits);
+	const splits = await resolveCategories(ctx, manual.splits);
+	await validatePayments(ctx, manual.spaceId, imported.date, splits);
 	if (
 		(await linkedContribution(ctx, manual._id)) ||
 		(await linkedContribution(ctx, imported._id))
@@ -206,8 +207,8 @@ export async function reconcile(
 	await ctx.db.patch(imported._id, {
 		kind: manual.kind,
 		note: manual.note,
-		splits: manual.splits,
-		funded: manual.splits.some((split) => Boolean(split.fundId)),
+		splits,
+		funded: splits.some((split) => Boolean(split.fundId)),
 		edited: true,
 		classificationStatus: "manual",
 		classificationRetryAt: undefined,

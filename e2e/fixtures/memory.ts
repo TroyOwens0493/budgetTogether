@@ -28,6 +28,7 @@ export class Memory {
 	query(table: string) {
 		const predicates: Predicate[] = [];
 		let descending = false;
+		let index: string;
 		const all = () =>
 			[...this.rows.values()]
 				.filter(
@@ -35,11 +36,13 @@ export class Memory {
 				)
 				.sort((a, b) => {
 					const key =
-						table === "transactions"
-							? "date"
-							: table === "plans"
-								? "month"
-								: "_creationTime";
+						index === "by_space"
+							? "_creationTime"
+							: table === "transactions"
+								? "date"
+								: table === "plans"
+									? "month"
+									: "_creationTime";
 					return (
 						String(a[key]).localeCompare(String(b[key])) * (descending ? -1 : 1)
 					);
@@ -62,7 +65,8 @@ export class Memory {
 		const value = (item: unknown, row: Row) =>
 			typeof item === "function" ? (item as (row: Row) => unknown)(row) : item;
 		const query = {
-			withIndex: (_index: string, fn: (q: typeof range) => unknown) => {
+			withIndex: (name: string, fn: (q: typeof range) => unknown) => {
+				index = name;
 				fn(range);
 				return query;
 			},

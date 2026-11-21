@@ -383,6 +383,28 @@ export async function entry(
 	}) as Promise<Id<"transactions">>;
 }
 
+export async function runCategoryBatch(db: Memory) {
+	const index = db.scheduled.findIndex(
+		(job) => job.name === "budgets:continueCategoryReplacement",
+	);
+	if (index < 0) return;
+	const [job] = db.scheduled.splice(index, 1);
+	if (job.delay !== 0)
+		throw new Error("Category batches should run immediately");
+	const args = job.args as FunctionArgs<
+		Reference<typeof budgets.continueCategoryReplacement>
+	>;
+	await invoke(budgets.continueCategoryReplacement, db, args);
+	return args.phase;
+}
+
+export async function drainCategoryBatches(db: Memory) {
+	for (let i = 0; i < 20; i++) {
+		if (!(await runCategoryBatch(db))) return;
+	}
+	throw new Error("Category deletion did not finish");
+}
+
 // Execute immediate durable continuations. Delayed watchdogs stay queued so tests
 // can explicitly simulate a lost action or an old watchdog arriving late.
 export async function drainSync(db: Memory, maxSteps = 1000) {
