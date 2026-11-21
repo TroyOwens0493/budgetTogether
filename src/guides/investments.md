@@ -19,11 +19,11 @@ Open **Projections** and scroll to **Investment accounts**. This is where you ma
 4. Select **Edit forecast** next to a holding to change its forecast assumptions.
 5. Clear the checkbox next to an account name to leave that whole account out of the forecast.
 
-To move a linked account to your shared budget, open **Accounts & settings** in **Personal**. Select **Options** next to the account, choose **Shared** in **Destination budget**, and select **Save**. Use **Accounts & settings** to **Sync** or **Reconnect** a connection.
+To move a linked account to your shared budget, open **Accounts & sharing** in **Personal**. Select **Options** next to the account, choose **Shared** in **Destination budget**, and select **Save**. Use **Accounts & sharing** to **Sync** or **Reconnect** a connection.
 
 ## Add a manual investment
 
-Select **Add investment** at the top of **Projections**. You can create a manual account with its first holding or pick a manual account you already added.
+Select **Add investment manually** in **Projections**. You can create a manual account with its first holding or pick a manual account you already added.
 
 ![The Add investment form filled out for a fund in a new manual brokerage account.](/learn/investments/manual-investment.png "Add the first holding in a manual account")
 
@@ -76,7 +76,7 @@ Add a separate holding for each new bond or CD purchase. Monthly investments app
 
 ## Fix missing or mismatched data
 
-- If an account's reported holdings differ from its balance, select **Sync** for the connection in **Accounts & settings**. If the mismatch continues, clear the account's checkbox under **Investment accounts** until the data is complete.
+- If an account's reported holdings differ from its balance, select **Sync** for the connection in **Accounts & sharing**. If the mismatch continues, clear the account's checkbox under **Investment accounts** until the data is complete.
 - If a holding has no current value, sync the account. If a rate or term is missing, use **Edit forecast** to enter it. To leave out a holding that still has a problem, clear **Include this holding in the forecast** and select **Save investment**.
 - Unsupported holdings, such as crypto and derivatives, can appear in the account list. The forecast leaves these out.
 - If lowering the current month's savings target leaves too much assigned to investments, reduce the **Monthly investment contribution** amounts or update and save the current month's plan.

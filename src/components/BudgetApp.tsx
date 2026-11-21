@@ -8,8 +8,8 @@ import {
 	LogOut,
 	Menu,
 	PiggyBank,
-	Settings,
 	TrendingUp,
+	UserRound,
 	X,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
@@ -36,7 +36,7 @@ const nav = [
 	["budget", "Monthly budget", CalendarDays],
 	["funds", "Funds", PiggyBank],
 	["projections", "Projections", TrendingUp],
-	["accounts", "Accounts & settings", Landmark],
+	["accounts", "Accounts & sharing", Landmark],
 ] as const;
 export function BudgetApp({ home }: { home: Home }) {
 	const membershipKey = home.spaces
@@ -105,7 +105,7 @@ function BudgetAppContent({ home }: { home: Home }) {
 		`${currentMonth.find((x) => x.type === "year")!.value}-${currentMonth.find((x) => x.type === "month")!.value}`,
 	);
 	const [view, setView] = useState<string>("overview");
-	const pageName = nav.find(([id]) => id === view)?.[1] ?? "Settings";
+	const pageName = nav.find(([id]) => id === view)?.[1] ?? "Profile";
 	const noticeContext = `${space._id}:${month}:${view}`;
 	const [notice, updateNotice] = useState({ text: "", context: noticeContext });
 	const setNotice = (text: string) =>
@@ -160,7 +160,7 @@ function BudgetAppContent({ home }: { home: Home }) {
 					setAcceptedSpace(spaceId);
 					setInviteToken(null);
 					setNotice(
-						"Shared budget created. Choose which accounts to move in Accounts & settings.",
+						"Shared budget created. Choose which accounts to move in Accounts & sharing.",
 					);
 				}}
 			/>
@@ -226,8 +226,8 @@ function BudgetAppContent({ home }: { home: Home }) {
 								closeMenu();
 							}}
 						>
-							<Settings size={18} />
-							Settings
+							<UserRound size={18} />
+							Profile
 						</button>
 						<a className="nav-item" href="/learn">
 							<BookOpen size={18} aria-hidden="true" />
@@ -268,7 +268,7 @@ function BudgetAppContent({ home }: { home: Home }) {
 					</span>
 					<div>
 						{alerts.button}
-						{view !== "projections" && (
+						{view !== "projections" && view !== "profile" && (
 							<label className="month-picker">
 								<span className="sr-only">Reporting month</span>
 								<input
@@ -327,6 +327,7 @@ function BudgetAppContent({ home }: { home: Home }) {
 							key={space._id}
 							{...props}
 							categories={data.categories}
+							onOpenAccounts={() => setView("accounts")}
 						/>
 					) : view === "budget" ? (
 						<>

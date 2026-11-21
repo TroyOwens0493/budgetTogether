@@ -2,7 +2,6 @@ import { useAction, useMutation, useQuery } from "convex/react";
 import { useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
-import { openPlaid } from "../lib/plaid-link";
 import { AccountReview } from "./AccountsView";
 import { ProjectionChart } from "./ProjectionChart";
 import { HoldingEditor, ProjectionSettingsEditor } from "./ProjectionEditors";
@@ -14,6 +13,7 @@ import {
 	prepareProjection,
 } from "./projection-data";
 import { ConfirmModal, usd } from "./ui";
+import { usePlaidConnection } from "./usePlaidConnection";
 import type { Run, ViewProps } from "./view-types";
 
 function AccountForecastToggle({
@@ -74,8 +74,6 @@ export function ProjectionsView({
 }) {
 	const data = useQuery(api.projections.list, active ? { spaceId } : "skip");
 	const remove = useMutation(api.projections.removeHolding);
-	const link = useAction(api.bank.link),
-		exchange = useAction(api.bank.exchange);
 	const refresh = useAction(api.investments.refreshReturns);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [editor, setEditor] = useState<{
@@ -84,6 +82,7 @@ export function ProjectionsView({
 	} | null>(null);
 	const [deleting, setDeleting] = useState<Holding | null>(null);
 	const [reviewing, setReviewing] = useState<Id<"connections"> | null>(null);
+	const plaid = usePlaidConnection(run, setReviewing, true);
 	const [refreshing, setRefreshing] = useState(false);
 	if (!active)
 		return (
@@ -96,6 +95,46 @@ export function ProjectionsView({
 	const forecast = prepareProjection(data);
 	const currentAge = data.settings?.currentAge ?? 0;
 	const final = forecast.points.at(-1);
+	const investmentAccounts = data.accounts.filter(
+		(account) => account.investment,
+	);
+	const hasHoldings = investmentAccounts.some(
+		(account) => account.holdings.length > 0,
+	);
+	const investmentActions = (
+		<>
+			<button
+				type="button"
+				disabled={plaid.busy}
+				onClick={() => void plaid.connect()}
+			>
+				Connect investments
+			</button>
+			<button type="button" className="secondary" onClick={() => setEditor({})}>
+				Add investment manually
+			</button>
+		</>
+	);
+	const accountSettings = (
+		<button type="button" className="text-button" onClick={onOpenAccounts}>
+			Accounts &amp; sharing
+		</button>
+	);
+	const investmentSetup = (
+		<section className="panel">
+			<h2>Investments</h2>
+			<p>
+				Connect an investment account or enter an investment to see its
+				forecast.
+			</p>
+			<div className="button-row">{investmentActions}</div>
+			<p className="muted">
+				New linked accounts start in Personal. To move one to Shared, open{" "}
+				{accountSettings}.
+			</p>
+			<output>{plaid.message}</output>
+		</section>
+	);
 	return (
 		<>
 			<div className="page-actions">
@@ -110,9 +149,6 @@ export function ProjectionsView({
 						onClick={() => setSettingsOpen(true)}
 					>
 						Forecast settings
-					</button>
-					<button type="button" onClick={() => setEditor({})}>
-						Add investment
 					</button>
 				</div>
 			</div>
@@ -156,6 +192,7 @@ export function ProjectionsView({
 					)}
 				</section>
 			)}
+			{!final && !hasHoldings && investmentSetup}
 			{final && data.settings && (
 				<>
 					<div className="summary-grid">
@@ -182,12 +219,16 @@ export function ProjectionsView({
 							kind="cash"
 							currentAge={data.settings.currentAge}
 						/>
-						<ProjectionChart
-							key={`investments:${data.settings.revision}`}
-							points={forecast.points}
-							kind="investments"
-							currentAge={data.settings.currentAge}
-						/>
+						{hasHoldings ? (
+							<ProjectionChart
+								key={`investments:${data.settings.revision}`}
+								points={forecast.points}
+								kind="investments"
+								currentAge={data.settings.currentAge}
+							/>
+						) : (
+							investmentSetup
+						)}
 					</div>
 					<details className="panel projection-notes">
 						<summary>Yearly forecast values</summary>
@@ -239,66 +280,45 @@ export function ProjectionsView({
 					))}
 				{!data.accounts.some((a) => !a.investment) && (
 					<p className="empty-state">
-						Connect a savings account in Accounts &amp; settings, or enter
+						Connect a savings account in Accounts &amp; sharing, or enter
 						unlinked cash.
 					</p>
 				)}
 			</section>
-			<section className="panel">
-				<div className="section-heading">
-					<h2>Investment accounts</h2>
-					<div className="button-row">
-						<button
-							type="button"
-							className="secondary"
-							disabled={refreshing}
-							onClick={async () => {
-								setRefreshing(true);
-								try {
-									await run(
-										() => refresh({ spaceId }),
-										"Return lookup finished.",
-									);
-								} finally {
-									setRefreshing(false);
-								}
-							}}
-						>
-							{refreshing ? "Loading…" : "Load historical returns"}
-						</button>
-						<button
-							type="button"
-							onClick={() =>
-								void run(async () => {
-									const token = await link({ investments: true });
-									await openPlaid(token, async (publicToken) => {
-										const id = await exchange({
-											publicToken,
-											investments: true,
-										});
-										setReviewing(id);
-									});
-								}, "Investment account linked. New linked accounts start in Personal.")
-							}
-						>
-							Connect investments
-						</button>
+			{investmentAccounts.length > 0 && (
+				<section className="panel">
+					<div className="section-heading">
+						<h2>Investment accounts</h2>
+						{hasHoldings && (
+							<div className="button-row">
+								<button
+									type="button"
+									className="secondary"
+									disabled={refreshing}
+									onClick={async () => {
+										setRefreshing(true);
+										try {
+											await run(
+												() => refresh({ spaceId }),
+												"Return lookup finished.",
+											);
+										} finally {
+											setRefreshing(false);
+										}
+									}}
+								>
+									{refreshing ? "Loading…" : "Load historical returns"}
+								</button>
+								{investmentActions}
+							</div>
+						)}
 					</div>
-				</div>
-				<p>
-					New linked accounts start in Personal. Use{" "}
-					<button
-						type="button"
-						className="text-button"
-						onClick={onOpenAccounts}
-					>
-						Accounts &amp; settings
-					</button>{" "}
-					to move an account to Shared, sync, reconnect, or disconnect it.
-				</p>
-				{data.accounts
-					.filter((a) => a.investment)
-					.map((account) => (
+					{hasHoldings && <output>{plaid.message}</output>}
+					<p>
+						Use {accountSettings} to move an account to Shared, sync, reconnect,
+						or disconnect it.
+					</p>
+					{investmentAccounts.map((account) => (
 						<div className="projection-account" key={account._id}>
 							<div className="account-row">
 								<AccountForecastToggle account={account} run={run} />
@@ -344,18 +364,14 @@ export function ProjectionsView({
 								<p>
 									No holdings yet.{" "}
 									{account.linked
-										? "Sync this connection in Accounts & settings."
+										? "Sync this connection in Accounts & sharing."
 										: "Add a holding to this account."}
 								</p>
 							)}
 						</div>
 					))}
-				{!data.accounts.some((a) => a.investment) && (
-					<p className="empty-state">
-						Connect an investment account or add a manual investment to start.
-					</p>
-				)}
-			</section>
+				</section>
+			)}
 			{settingsOpen && (
 				<ProjectionSettingsEditor
 					data={data}

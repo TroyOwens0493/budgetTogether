@@ -67,7 +67,7 @@ test("leaving deletes the shared budget for both open sessions and cancel keeps 
 	await openMonthly(alice);
 	await openMonthly(bob);
 	await alice
-		.getByRole("button", { name: "Accounts & settings", exact: true })
+		.getByRole("button", { name: "Accounts & sharing", exact: true })
 		.click();
 	await alice
 		.getByRole("button", { name: "Leave shared budget", exact: true })

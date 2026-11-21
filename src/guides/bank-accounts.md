@@ -7,9 +7,9 @@ section: Accounts and sharing
 
 ## Connect a bank
 
-Open **Accounts & settings** in the menu.
+Open **Accounts & sharing** in the menu.
 
-![The bank connection button above three account cards, with two numbered highlights.](/learn/bank-accounts/accounts.png "Accounts & settings")
+![The bank connection button above three account cards, with two numbered highlights.](/learn/bank-accounts/accounts.png "Accounts & sharing")
 
 1. Select **Connect a bank**. In the window that opens, find your bank, sign in, and follow the steps to choose which accounts to connect.
 2. Under **Accounts in this budget**, select **Options** on an account to change its name or move it.
@@ -20,7 +20,7 @@ If the app flags a possible duplicate, select **Review accounts** under **Your b
 
 ## Move or rename an account
 
-Select the budget that has the account, then open **Accounts & settings**. An account marked **Current assignment** belongs to the selected budget. **Historical records** shows where older transactions are available. Only the person who connected an account can move it.
+Select the budget that has the account, then open **Accounts & sharing**. An account marked **Current assignment** belongs to the selected budget. **Historical records** shows where older transactions are available. Only the person who connected an account can move it.
 
 Select **Options** on the account you want to change.
 
@@ -35,7 +35,7 @@ Select **Options** on the account you want to change.
 
 ## Check and fix an import
 
-Open **Accounts & settings** and look under **Your bank connections**. This list shows the banks you connected, whichever budget you are viewing.
+Open **Accounts & sharing** and look under **Your bank connections**. This list shows the banks you connected, whichever budget you are viewing.
 
 ![Two bank connections, including a paused import with its last successful import time and recovery controls.](/learn/bank-accounts/bank-connections.png "Checking the status of an import")
 

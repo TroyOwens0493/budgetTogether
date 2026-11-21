@@ -13,7 +13,7 @@ test("capture a partner invitation from send through acceptance", async ({
 }) => {
 	await page.goto(fixturePage);
 	await page
-		.getByRole("button", { name: "Accounts & settings", exact: true })
+		.getByRole("button", { name: "Accounts & sharing", exact: true })
 		.click();
 	const invitation = page.locator(".shared-budget-setup");
 	const email = invitation.getByLabel("Partner’s email");
@@ -165,7 +165,7 @@ test.describe("funding and leaving an active shared budget", () => {
 			page.getByText(/Your personal allocation is \$350\.00/),
 		).toBeVisible();
 		const accounts = page.getByRole("button", {
-			name: "Accounts & settings",
+			name: "Accounts & sharing",
 			exact: true,
 		});
 		await accounts.click();

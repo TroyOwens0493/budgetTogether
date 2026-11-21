@@ -268,7 +268,7 @@ a.nav-item:hover {
 	padding: 0 38px 50px;
 	max-width: 1500px;
 	width: 100%;
-	margin: auto;
+	margin: 0 auto;
 }
 .topbar {
 	display: flex;
@@ -611,6 +611,15 @@ td:last-child {
 	margin-right: auto;
 	font-size: 12px;
 	color: var(--muted);
+}
+.plan-mobile-balance {
+	display: none;
+}
+.plan-save-controls {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 8px 12px;
 }
 .plan-grid {
 	display: grid;
@@ -1137,19 +1146,57 @@ dialog::backdrop {
 	.filters {
 		padding: 16px;
 		gap: 10px;
+		flex-direction: column;
+		align-items: stretch;
+	}
+	.plan-grid > .plan-summary {
+		display: contents;
+	}
+	.plan-breakdown {
+		padding: 20px;
+		border-radius: 10px;
+	}
+	.plan-breakdown .total {
+		display: none;
+	}
+	.plan-save {
+		position: sticky;
+		bottom: 0;
+		z-index: 2;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		padding: 10px 12px calc(10px + env(safe-area-inset-bottom));
+		background: #f6f7f3;
+		color: #263630;
+		border-top: 1px solid var(--border);
+		box-shadow: 0 -4px 12px #26363012;
+	}
+	.plan-mobile-balance,
+	.plan-mobile-balance strong {
+		display: block;
+	}
+	.plan-mobile-balance {
+		flex-shrink: 0;
+	}
+	.plan-save-controls {
+		justify-content: flex-end;
+	}
+	.plan-save-controls button {
+		width: auto;
+		margin: 0;
+		background: var(--green);
+		color: white;
 	}
 	.filters .search-input {
 		width: 100%;
 		margin: 0;
 	}
-	.search-input input {
-		width: 100%;
-	}
-	.filters > label {
-		flex: 1;
-	}
+	.search-input input,
 	.filters select {
-		font-size: 12px;
+		width: 100%;
+		min-width: 0;
 	}
 	th,
 	td {

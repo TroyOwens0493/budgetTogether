@@ -66,7 +66,7 @@ If you see **Complete your forecast**, follow the messages to get your charts ba
 ![The forecast banner with a missing cash balance, mismatched holdings, and a missing investment return.](/learn/projections/forecast-warnings.png "Examples of problems that pause the forecast")
 
 1. **Complete your forecast** lists what needs attention. If your settings are missing, select **Set up forecast**. If your current plan is unsaved or out of balance, use **Edit monthly budget** to fix and save it.
-2. If a bank reports no usable cash balance, open **Accounts & settings** and select **Sync** for that connection. The forecast needs a balance of zero or more in US dollars. You can also clear the account's box under **Cash savings accounts**.
+2. If a bank reports no usable cash balance, open **Accounts & sharing** and select **Sync** for that connection. The forecast needs a balance of zero or more in US dollars. You can also clear the account's box under **Cash savings accounts**.
 3. If the value of the reported holdings differs from the investment account balance, sync the connection or clear the account's box under **Investment accounts**.
 4. If a holding is missing a return or bond or CD terms, open **Edit forecast** for that holding and fill in the missing information.
 

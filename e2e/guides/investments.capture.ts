@@ -51,7 +51,7 @@ test("capture investment accounts and forecast assumptions", async ({
 	await page.goto(fixturePage);
 	await page.getByRole("button", { name: "Projections", exact: true }).click();
 	await page
-		.getByRole("button", { name: "Add investment", exact: true })
+		.getByRole("button", { name: "Add investment manually", exact: true })
 		.click();
 	const dialog = page.getByRole("dialog");
 	const account = dialog.getByLabel("Investment account", { exact: true });

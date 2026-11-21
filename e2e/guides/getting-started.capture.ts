@@ -43,8 +43,8 @@ test("capture the desktop sidebar", async ({ household: { page } }) => {
 		"Monthly budget",
 		"Funds",
 		"Projections",
-		"Accounts & settings",
-		"Settings",
+		"Accounts & sharing",
+		"Profile",
 	];
 	await shoot(page, `${slug}/sidebar`, {
 		clip: { x: 0, y: 0, width: 270, height: 800 },

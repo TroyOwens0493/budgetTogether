@@ -11,9 +11,8 @@ type PlaidWindow = Window & {
 let loading: Promise<void> | undefined;
 export async function openPlaid(
 	token: string,
-	onSuccess: (token: string) => Promise<void>,
-	updated = false,
-): Promise<void> {
+	onSuccess?: (token: string) => Promise<void>,
+): Promise<"linked" | "cancelled"> {
 	if (!(window as PlaidWindow).Plaid) {
 		loading ??= new Promise((resolve, reject) => {
 			const script = document.createElement("script");
@@ -32,22 +31,34 @@ export async function openPlaid(
 		});
 		await loading;
 	}
+	const plaid = (window as PlaidWindow).Plaid;
+	if (!plaid)
+		throw new Error(
+			"Could not initialize Plaid. Reload the page and try again.",
+		);
 	return new Promise((resolve, reject) => {
-		const handler = (window as PlaidWindow).Plaid!.create({
+		let completed = false;
+		const handler = plaid.create({
 			token,
 			onSuccess: (publicToken) => {
-				void (updated ? Promise.resolve() : onSuccess(publicToken)).then(
-					() => {
-						handler.destroy();
-						resolve();
-					},
-					(e) => {
-						handler.destroy();
-						reject(e);
-					},
-				);
+				if (completed) return;
+				completed = true;
+				void Promise.resolve()
+					.then(() => onSuccess?.(publicToken))
+					.then(
+						() => {
+							handler.destroy();
+							resolve("linked");
+						},
+						(e) => {
+							handler.destroy();
+							reject(e);
+						},
+					);
 			},
 			onExit: (error) => {
+				if (completed) return;
+				completed = true;
 				handler.destroy();
 				if (error)
 					reject(
@@ -55,7 +66,7 @@ export async function openPlaid(
 							error.display_message ?? "Bank connection was not completed.",
 						),
 					);
-				else resolve();
+				else resolve("cancelled");
 			},
 		});
 		handler.open();

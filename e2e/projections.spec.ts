@@ -227,8 +227,18 @@ test("age forecasts persist, split the target once, and support a maturing bond"
 		await page.getByLabel("Additional unlinked cash savings").fill("5000");
 		await page.getByRole("button", { name: "Save forecast settings" }).click();
 		await expect(page.getByRole("dialog")).toHaveCount(0);
+		const setup = page.locator(".dashboard-grid section").filter({
+			has: page.getByRole("heading", { name: "Investments", exact: true }),
+		});
+		await expect(
+			setup.getByRole("button", { name: "Connect investments" }),
+		).toBeVisible();
+		await expect(
+			setup.getByRole("button", { name: "Add investment manually" }),
+		).toBeVisible();
+		await expect(page.locator(".projection-investments")).toHaveCount(0);
 		await page
-			.getByRole("button", { name: "Add investment", exact: true })
+			.getByRole("button", { name: "Add investment manually", exact: true })
 			.click();
 		await page
 			.getByLabel("Account name", { exact: true })
@@ -243,6 +253,27 @@ test("age forecasts persist, split the target once, and support a maturing bond"
 			.getByRole("button", { name: "Save investment", exact: true })
 			.click();
 		await expect(page.getByRole("dialog")).toHaveCount(0);
+		await page
+			.getByRole("button", { name: "Transactions", exact: true })
+			.click();
+		await expect(
+			page.getByRole("heading", { name: "No transactions this month" }),
+		).toBeVisible();
+		await page
+			.getByRole("button", { name: "Add transaction", exact: true })
+			.click();
+		await expect(
+			page
+				.getByRole("dialog")
+				.locator("option")
+				.filter({ hasText: "SoFi portfolio" }),
+		).toHaveCount(0);
+		await page
+			.getByRole("button", { name: "Close dialog", exact: true })
+			.click();
+		await page
+			.getByRole("button", { name: "Projections", exact: true })
+			.click();
 		await expect(page.locator(".projection-cash .projection-value")).toHaveText(
 			"$12,200.00",
 		);
@@ -382,7 +413,7 @@ test("missing returns block forecasts and compound returns track the saved budge
 		await page.getByLabel("Additional unlinked cash savings").fill("5000");
 		await page.getByRole("button", { name: "Save forecast settings" }).click();
 		await page
-			.getByRole("button", { name: "Add investment", exact: true })
+			.getByRole("button", { name: "Add investment manually", exact: true })
 			.click();
 		await page
 			.getByLabel("Account name", { exact: true })

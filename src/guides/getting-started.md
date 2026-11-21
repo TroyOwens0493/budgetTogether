@@ -27,10 +27,10 @@ After you create your account, Budget Together asks you to set up your private b
 2. Check the **Reporting time zone**. Budget Together suggests the time zone from your device.
 3. Select **Create my private budget**.
 
-To import transactions, open **Accounts & settings** and select **Connect a bank**. New bank accounts start in your private budget. To plan your first month, open **Monthly budget**.
+To import transactions, open **Accounts & sharing** and select **Connect a bank**. New bank accounts start in your private budget. To plan your first month, open **Monthly budget**.
 
 > [!TIP]
-> To invite a partner, open **Accounts & settings**. Under **Start a shared budget**, enter your **Partner’s email** and select **Send invitation**. Your shared budget starts when your partner accepts.
+> To invite a partner, open **Accounts & sharing**. Under **Start a shared budget**, enter your **Partner’s email** and select **Send invitation**. Your shared budget starts when your partner accepts.
 
 ## Find your way around
 
@@ -42,8 +42,8 @@ To import transactions, open **Accounts & settings** and select **Connect a bank
 4. **Monthly budget** is where you set expected income, category limits, and your savings target.
 5. **Funds** helps you set money aside for repeating payments and one-time goals.
 6. **Projections** estimates how your cash savings and investments could grow.
-7. **Accounts & settings** is where you connect a bank, manage accounts, or invite a partner.
-8. **Settings** is where you change your name, time zone, or password.
+7. **Accounts & sharing** is where you connect a bank, manage accounts, or invite a partner.
+8. **Profile** is where you change your name, time zone, or password.
 9. **Learn** opens these guides.
 
 ## Choose a month and check alerts

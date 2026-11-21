@@ -14,12 +14,22 @@ export function TransactionsView({
 	active,
 	run,
 	categories,
-}: ViewProps & { categories: Doc<"categories">[] }) {
+	onOpenAccounts,
+}: ViewProps & {
+	categories: Doc<"categories">[];
+	onOpenAccounts: () => void;
+}) {
 	const [search, setSearch] = useState("");
 	const [category, setCategory] = useState("");
 	const [account, setAccount] = useState("");
 	const [page, setPage] = useState<{ key: string; cursor?: string }>();
-	const pageKey = JSON.stringify([spaceId, month, search, category, account]);
+	const pageKey = JSON.stringify([
+		spaceId,
+		month,
+		search.trim(),
+		category,
+		account,
+	]);
 	const cursor = page?.key === pageKey ? page.cursor : undefined;
 	const setCursor = (cursor: string | undefined) =>
 		setPage({ key: pageKey, cursor });
@@ -30,11 +40,12 @@ export function TransactionsView({
 	const rows = useQuery(api.budgets.transactions, {
 		spaceId,
 		month,
-		search,
+		search: search.trim(),
 		...(category ? { categoryId: category as Id<"categories"> } : {}),
 		...(account ? { accountId: account as Id<"accounts"> } : {}),
 		cursor,
 	});
+	const filtered = Boolean(search.trim() || category || account);
 	return (
 		<>
 			<div className="page-actions">
@@ -98,98 +109,127 @@ export function TransactionsView({
 						</select>
 					</label>
 				</div>
-				<div className="table-scroll">
-					<table>
-						<thead>
-							<tr>
-								<th>Date</th>
-								<th>Transaction</th>
-								<th>Category</th>
-								<th>Account</th>
-								<th>Amount</th>
-							</tr>
-						</thead>
-						<tbody>
-							{rows?.rows.map((x) => (
-								<tr key={x._id}>
-									<td>{x.date}</td>
-									<td>
-										<button
-											type="button"
-											className="transaction-button"
-											onClick={() => setEditing(x)}
-										>
-											{x.description}
-										</button>
-										<small>
-											{x.pending ? "Pending · " : ""}
-											{x.source === "manual" ? "Manual" : x.kind}
-											{x.note ? ` · ${x.note}` : ""}
-										</small>
-										{!x.edited && x.classificationStatus === "pending" && (
-											<small>Classification pending</small>
-										)}
-										{!x.edited && x.classificationStatus === "review" && (
-											<span className="tag">Needs review</span>
-										)}
-									</td>
-									<td>
-										<button
-											type="button"
-											className="transaction-button tag"
-											onClick={() => setEditing(x)}
-										>
-											{x.kind !== "purchase"
-												? x.kind
-												: x.splits.length > 1
-													? `Split · ${x.splits.length} categories`
-													: (categories.find(
-															(c) => c._id === x.splits[0]?.categoryId,
-														)?.name ?? "Uncategorized")}
-										</button>
-									</td>
-									<td>
-										{accounts?.find((a) => a._id === x.accountId)?.name ??
-											"Account"}
-									</td>
-									<td className={x.amount < 0 ? "inflow" : ""}>
-										{usd(-x.amount)}
-									</td>
+				{rows && rows.rows.length > 0 && (
+					<div className="table-scroll">
+						<table>
+							<thead>
+								<tr>
+									<th>Date</th>
+									<th>Transaction</th>
+									<th>Category</th>
+									<th>Account</th>
+									<th>Amount</th>
 								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
+							</thead>
+							<tbody>
+								{rows?.rows.map((x) => (
+									<tr key={x._id}>
+										<td>{x.date}</td>
+										<td>
+											<button
+												type="button"
+												className="transaction-button"
+												onClick={() => setEditing(x)}
+											>
+												{x.description}
+											</button>
+											<small>
+												{x.pending ? "Pending · " : ""}
+												{x.source === "manual" ? "Manual" : x.kind}
+												{x.note ? ` · ${x.note}` : ""}
+											</small>
+											{!x.edited && x.classificationStatus === "pending" && (
+												<small>Classification pending</small>
+											)}
+											{!x.edited && x.classificationStatus === "review" && (
+												<span className="tag">Needs review</span>
+											)}
+										</td>
+										<td>
+											<button
+												type="button"
+												className="transaction-button tag"
+												onClick={() => setEditing(x)}
+											>
+												{x.kind !== "purchase"
+													? x.kind
+													: x.splits.length > 1
+														? `Split · ${x.splits.length} categories`
+														: (categories.find(
+																(c) => c._id === x.splits[0]?.categoryId,
+															)?.name ?? "Uncategorized")}
+											</button>
+										</td>
+										<td>
+											{accounts?.find((a) => a._id === x.accountId)?.name ??
+												"Account"}
+										</td>
+										<td className={x.amount < 0 ? "inflow" : ""}>
+											{usd(-x.amount)}
+										</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					</div>
+				)}
 				{!rows ? (
 					<p className="empty-state">Loading transactions…</p>
 				) : (
 					<>
-						{!rows.rows.length && (
-							<p className="empty-state">
-								{rows.next
-									? "No matches on this page. Check the next page."
-									: "No more transactions match these filters."}
-							</p>
+						{rows.rows.length === 0 && (
+							<div className="empty-state">
+								{rows.next ? (
+									<p>
+										{filtered
+											? "No matches on this page. Check the next page."
+											: "No transactions on this page. Check the next page."}
+									</p>
+								) : filtered ? (
+									<p>No transactions match these filters.</p>
+								) : cursor ? (
+									<p>No transactions on this page.</p>
+								) : (
+									<>
+										<h2>No transactions this month</h2>
+										{active && (
+											<p>
+												Connect a bank in{" "}
+												<button
+													type="button"
+													className="text-button"
+													onClick={onOpenAccounts}
+												>
+													Accounts &amp; sharing
+												</button>{" "}
+												or select Add transaction above.
+											</p>
+										)}
+									</>
+								)}
+							</div>
 						)}
-						<div className="pagination">
-							<span>{rows.rows.length} transactions on this page</span>
-							<button
-								type="button"
-								className="secondary"
-								disabled={!cursor}
-								onClick={() => setCursor(undefined)}
-							>
-								First page
-							</button>
-							<button
-								type="button"
-								className="secondary"
-								disabled={!rows.next}
-								onClick={() => setCursor(rows.next ?? undefined)}
-							>
-								Next page
-							</button>
-						</div>
+						{(cursor || rows.next) && (
+							<div className="pagination">
+								<span>{rows.rows.length} transactions on this page</span>
+								<button
+									type="button"
+									className="secondary"
+									disabled={!cursor}
+									onClick={() => setCursor(undefined)}
+								>
+									First page
+								</button>
+								<button
+									type="button"
+									className="secondary"
+									disabled={!rows.next}
+									onClick={() => setCursor(rows.next ?? undefined)}
+								>
+									Next page
+								</button>
+							</div>
+						)}
 					</>
 				)}
 			</section>
@@ -215,10 +255,20 @@ function TransactionEditor({
 	onClose,
 }: ViewProps & {
 	categories: Doc<"categories">[];
-	accounts: { _id: Id<"accounts">; name: string; active: boolean }[];
+	accounts: {
+		_id: Id<"accounts">;
+		name: string;
+		active: boolean;
+		investment: boolean;
+	}[];
 	entry: Doc<"transactions"> | null;
 	onClose: () => void;
 }) {
+	const accountOptions = accounts.filter((account) =>
+		entry
+			? account._id === entry.accountId
+			: account.active && !account.investment,
+	);
 	const save = useMutation(api.budgets.saveTransaction);
 	const remove = useMutation(api.budgets.deleteTransaction);
 	const reconcile = useMutation(api.budgets.reconcile);
@@ -317,20 +367,18 @@ function TransactionEditor({
 							required
 							disabled={Boolean(entry)}
 						>
-							{accounts
-								.filter((x) => x.active || x._id === entry?.accountId)
-								.map((x) => (
-									<option key={x._id} value={x._id}>
-										{x.name}
-									</option>
-								))}
+							{accountOptions.map((x) => (
+								<option key={x._id} value={x._id}>
+									{x.name}
+								</option>
+							))}
 						</select>
 						{entry && (
 							<input type="hidden" name="account" value={entry.accountId} />
 						)}
 					</label>
-					{!accounts.some((x) => x.active) && !entry && (
-						<p>Connect a bank in Accounts & settings first.</p>
+					{!entry && accountOptions.length === 0 && (
+						<p>Connect a bank in Accounts & sharing first.</p>
 					)}
 					<label htmlFor="transactionsview-description">
 						Description
@@ -495,7 +543,10 @@ function TransactionEditor({
 						</p>
 					)}
 					<div className="button-row">
-						<button type="submit" disabled={!amounts.data}>
+						<button
+							type="submit"
+							disabled={!amounts.data || (!entry && !accountOptions.length)}
+						>
 							Save transaction
 						</button>
 						{entry?.source === "manual" && (

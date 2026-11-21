@@ -50,6 +50,7 @@ export const list = query({
 			_id: a._id,
 			name: a.name,
 			type: a.type,
+			investment: a.investment ?? false,
 			mask: a.mask,
 			active: a.active && a.spaceId === args.spaceId,
 			revision: a.revision,

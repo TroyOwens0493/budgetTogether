@@ -2,6 +2,8 @@ import { usd } from "./ui";
 import type { Dashboard } from "./view-types";
 
 export function Summary({ data }: { data: Dashboard }) {
+	const target = data.plan?.savingsTarget ?? 0;
+	const difference = data.unreservedSavings - target;
 	return (
 		<div className="summary-grid">
 			<article className="summary-card">
@@ -21,11 +23,11 @@ export function Summary({ data }: { data: Dashboard }) {
 				<span>Saved this month</span>
 				<strong>{usd(data.savings)}</strong>
 				<small>
-					{usd(data.unreservedSavings - (data.plan?.savingsTarget ?? 0))}{" "}
-					{data.unreservedSavings >= (data.plan?.savingsTarget ?? 0)
-						? "above"
-						: "relative to"}{" "}
-					your {usd(data.plan?.savingsTarget ?? 0)} target
+					{target === 0
+						? "No savings target set"
+						: difference === 0
+							? "Target met"
+							: `${usd(Math.abs(difference))} ${difference < 0 ? "below" : "above"} target`}
 				</small>
 				{data.fundPlan.items.length > 0 && (
 					<small>

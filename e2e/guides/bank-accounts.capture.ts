@@ -66,7 +66,7 @@ test("capture account assignments and bank connection states", async ({
 	await page.goto(fixturePage);
 	await page.getByRole("button", { name: "Shared", exact: true }).click();
 	await page
-		.getByRole("button", { name: "Accounts & settings", exact: true })
+		.getByRole("button", { name: "Accounts & sharing", exact: true })
 		.click();
 	const connect = page.getByRole("button", { name: "Connect a bank" });
 	const accountPanel = page.locator("section").filter({

@@ -13,7 +13,7 @@ test("capture the settings menu, profile, and change password form", async ({
 	});
 	await page.goto(fixturePage);
 	const menu = page.locator(".sidebar-bottom");
-	const settings = menu.getByRole("button", { name: "Settings", exact: true });
+	const settings = menu.getByRole("button", { name: "Profile", exact: true });
 	const signOut = menu.getByRole("button", { name: "Sign out", exact: true });
 	const box = await menu.boundingBox();
 	if (!box) throw new Error("The settings menu is missing.");
@@ -26,7 +26,7 @@ test("capture the settings menu, profile, and change password form", async ({
 		},
 		annotate: [
 			{
-				target: settings.getByText("Settings", { exact: true }),
+				target: settings.getByText("Profile", { exact: true }),
 				badge: "right",
 			},
 			{

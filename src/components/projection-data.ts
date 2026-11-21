@@ -88,7 +88,7 @@ export function prepareProjection(data: ProjectionData) {
 				account.balance < 0
 			)
 				errors.push(
-					`${name}: Your bank didn't report a usable cash balance in US dollars. Sync the account in Accounts & settings, or uncheck it under Cash savings accounts.`,
+					`${name}: Your bank didn't report a usable cash balance in US dollars. Sync the account in Accounts & sharing, or uncheck it under Cash savings accounts.`,
 				);
 			else cash += account.balance;
 			continue;
@@ -103,7 +103,7 @@ export function prepareProjection(data: ProjectionData) {
 				Math.abs(total - account.balance) > 100
 			)
 				errors.push(
-					`${name}: The holdings your bank reported don't add up to the account balance. Sync the account in Accounts & settings, or uncheck it until the data is complete.`,
+					`${name}: The holdings your bank reported don't add up to the account balance. Sync the account in Accounts & sharing, or uncheck it until the data is complete.`,
 				);
 		}
 		for (const holding of account.holdings) {

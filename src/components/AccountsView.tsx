@@ -4,11 +4,11 @@ import { useState } from "react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { connectionStatus } from "../domain/bank-connection";
-import { openPlaid } from "../lib/plaid-link";
 import { AccountOptions } from "./AccountOptions";
 import { ContributionsView } from "./ContributionsView";
 import { SharingInvites } from "./SharingInvites";
 import { ConfirmModal, Modal } from "./ui";
+import { usePlaidConnection } from "./usePlaidConnection";
 import type { ViewProps } from "./view-types";
 export function AccountsView({
 	spaceId,
@@ -23,12 +23,11 @@ export function AccountsView({
 }) {
 	const accounts = useQuery(api.accounts.list, { spaceId });
 	const connections = useQuery(api.accounts.connections, {});
-	const link = useAction(api.bank.link);
-	const exchange = useAction(api.bank.exchange);
 	const sync = useAction(api.bank.sync);
 	const disconnect = useAction(api.bank.disconnect);
 	const leave = useMutation(api.sharing.leave);
 	const [reviewing, setReviewing] = useState<Id<"connections"> | null>(null);
+	const plaid = usePlaidConnection(run, setReviewing);
 	const [leaving, setLeaving] = useState<Id<"spaces"> | null>(null);
 	const [editingAccount, setEditingAccount] = useState<Id<"accounts"> | null>(
 		null,
@@ -56,21 +55,14 @@ export function AccountsView({
 				<div className="button-row">
 					<button
 						type="button"
-						disabled={!active}
-						onClick={() =>
-							run(async () => {
-								const token = await link({});
-								await openPlaid(token, async (publicToken) => {
-									const id = await exchange({ publicToken });
-									setReviewing(id);
-								});
-							}, "Bank linked. Check for accounts that need review.")
-						}
+						disabled={!active || plaid.busy}
+						onClick={() => void plaid.connect()}
 					>
 						Connect a bank
 					</button>
 				</div>
 			</div>
+			<output>{plaid.message}</output>
 			<section className="panel">
 				<h2>Accounts in this budget</h2>
 				<div className="accounts-grid">
@@ -127,9 +119,10 @@ export function AccountsView({
 								<button
 									type="button"
 									className="secondary"
-									disabled={["disconnected", "review", "discarding"].includes(
-										c.status,
-									)}
+									disabled={
+										plaid.busy ||
+										["disconnected", "review", "discarding"].includes(c.status)
+									}
 									onClick={() =>
 										run(
 											() => sync({ id: c._id }),
@@ -142,16 +135,11 @@ export function AccountsView({
 								<button
 									type="button"
 									className="secondary"
-									disabled={["disconnected", "review", "discarding"].includes(
-										c.status,
-									)}
-									onClick={() =>
-										run(async () => {
-											const token = await link({ connectionId: c._id });
-											await openPlaid(token, async () => {}, true);
-											await sync({ id: c._id });
-										}, "Reconnection completed.")
+									disabled={
+										plaid.busy ||
+										["disconnected", "review", "discarding"].includes(c.status)
 									}
+									onClick={() => void plaid.connect(c._id)}
 								>
 									Reconnect
 								</button>

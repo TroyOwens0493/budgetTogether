@@ -446,7 +446,7 @@ export function HoldingEditor({
 								? "Enter the CD's APY. The forecast compounds interest until maturity, then moves the full value to cash."
 								: type === "cash"
 									? "Account cash defaults to 0% interest unless you enter a rate."
-									: "Leave blank to use the historical annualized return. We use 10 years, or the available history for newer investments. At least one year is required."}
+									: "Enter the yearly return you expect, or enter a trading symbol and leave the return blank to use its past performance. The forecast uses up to 10 years of prices. If there is less than one year of price history, enter your own expected return."}
 						</p>
 					</>
 				)}
