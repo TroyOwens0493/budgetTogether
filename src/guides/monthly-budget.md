@@ -32,7 +32,7 @@ If you have a shared budget, you enter household income there, and your private 
 
 ## Plan the next month
 
-When you open a month for the first time, Budget Together uses the latest earlier plan to fill in the starting amounts. If you see **Load current plan** as the new month opens, select it before you start editing. Review the income, limits, and savings target. The **Funds** amount is calculated for the month you open. Balance the plan and select **Save budget** to reserve that month's fund amounts.
+When you open a month for the first time, Budget Together uses the latest earlier plan to fill in the starting amounts. Review the income, limits, and savings target. The **Funds** amount is calculated for the month you open. Balance the plan and select **Save budget** to reserve that month's fund amounts.
 
 To set up the next month from the one you are viewing, select **Copy limits to** followed by the next month's date, below the plan. Then choose that month in **Reporting month** to finish and save. If you see **Next month already has a budget. Open it to make changes there.**, use **Reporting month** to open it and make your changes there.
 

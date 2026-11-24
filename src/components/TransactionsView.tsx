@@ -414,8 +414,8 @@ function TransactionEditor({
 					</label>
 					{entry?.source === "plaid" && (
 						<p className="muted">
-							Imported amount and date cannot be changed. Enter the bank amount
-							shown: {usd(entry.amount)}.
+							The bank sets the amount ({usd(entry.amount)}) and date, so they
+							can't be changed. You can still change the other details.
 						</p>
 					)}
 					<label>

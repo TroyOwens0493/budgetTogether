@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { amountError } from "../domain/validation";
+import { ActionErrorBanner } from "./ErrorBanner";
 import { ValidatedInput } from "./ValidatedInput";
 export const usd = (value: number) =>
 	new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(
@@ -80,6 +81,7 @@ export function Modal({
 					Close
 				</button>
 			</div>
+			<ActionErrorBanner />
 			{children}
 		</dialog>
 	);
