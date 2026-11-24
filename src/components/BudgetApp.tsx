@@ -19,7 +19,7 @@ import { authClient } from "../lib/auth-client";
 import { errorMessage } from "../lib/error-message";
 import { AccountsView } from "./AccountsView";
 import { BudgetReadBoundary } from "./BudgetReadBoundary";
-import { ErrorBanner } from "./ErrorBanner";
+import { ActionErrorContext, ErrorBanner } from "./ErrorBanner";
 import { FundsView } from "./FundsView";
 import { InviteReview } from "./InviteReview";
 import { OverviewView } from "./OverviewView";
@@ -167,201 +167,205 @@ function BudgetAppContent({ home }: { home: Home }) {
 		);
 
 	return (
-		<div className="app-shell">
-			<aside className="sidebar">
-				<div className="sidebar-header">
-					<a className="brand" href="/">
-						<span>b.</span> budget together
-					</a>
-				</div>
-				<div
-					id={menuId}
-					className={`sidebar-menu${menuOpen ? " is-open" : ""}`}
-				>
-					{personalSpace && sharedSpace && (
-						<fieldset className="space-toggle" aria-label="Budget space">
-							{(
-								[
-									[personalSpace, "Personal"],
-									[sharedSpace, "Shared"],
-								] as const
-							).map(([budget, title]) => (
+		<ActionErrorContext.Provider
+			value={{ message: error, dismiss: () => setError("") }}
+		>
+			<div className="app-shell">
+				<aside className="sidebar">
+					<div className="sidebar-header">
+						<a className="brand" href="/">
+							<span>b.</span> budget together
+						</a>
+					</div>
+					<div
+						id={menuId}
+						className={`sidebar-menu${menuOpen ? " is-open" : ""}`}
+					>
+						{personalSpace && sharedSpace && (
+							<fieldset className="space-toggle" aria-label="Budget space">
+								{(
+									[
+										[personalSpace, "Personal"],
+										[sharedSpace, "Shared"],
+									] as const
+								).map(([budget, title]) => (
+									<button
+										key={budget._id}
+										type="button"
+										aria-pressed={space._id === budget._id}
+										onClick={() => {
+											setSelected(budget._id);
+											closeMenu();
+										}}
+									>
+										{title}
+									</button>
+								))}
+							</fieldset>
+						)}
+						<nav aria-label="Main navigation">
+							{nav.map(([id, name, Icon]) => (
 								<button
-									key={budget._id}
+									key={id}
 									type="button"
-									aria-pressed={space._id === budget._id}
+									className={view === id ? "nav-item selected" : "nav-item"}
+									aria-current={view === id ? "page" : undefined}
 									onClick={() => {
-										setSelected(budget._id);
+										setView(id);
 										closeMenu();
 									}}
 								>
-									{title}
+									<Icon size={18} />
+									{name}
 								</button>
 							))}
-						</fieldset>
-					)}
-					<nav aria-label="Main navigation">
-						{nav.map(([id, name, Icon]) => (
+						</nav>
+						<div className="sidebar-bottom">
 							<button
-								key={id}
+								className="nav-item"
 								type="button"
-								className={view === id ? "nav-item selected" : "nav-item"}
-								aria-current={view === id ? "page" : undefined}
 								onClick={() => {
-									setView(id);
+									setView("profile");
 									closeMenu();
 								}}
 							>
-								<Icon size={18} />
-								{name}
+								<UserRound size={18} />
+								Profile
 							</button>
-						))}
-					</nav>
-					<div className="sidebar-bottom">
-						<button
-							className="nav-item"
-							type="button"
-							onClick={() => {
-								setView("profile");
-								closeMenu();
-							}}
-						>
-							<UserRound size={18} />
-							Profile
-						</button>
-						<a className="nav-item" href="/learn">
-							<BookOpen size={18} aria-hidden="true" />
-							Learn
-						</a>
-						<button
-							className="nav-item"
-							type="button"
-							onClick={() =>
-								run(async () => {
-									await authClient.signOut();
-									window.location.reload();
-								}, "Signed out.")
-							}
-						>
-							<LogOut size={18} />
-							Sign out
-						</button>
+							<a className="nav-item" href="/learn">
+								<BookOpen size={18} aria-hidden="true" />
+								Learn
+							</a>
+							<button
+								className="nav-item"
+								type="button"
+								onClick={() =>
+									run(async () => {
+										await authClient.signOut();
+										window.location.reload();
+									}, "Signed out.")
+								}
+							>
+								<LogOut size={18} />
+								Sign out
+							</button>
+						</div>
 					</div>
-				</div>
-			</aside>
-			<main className="main-content">
-				<header className="topbar">
-					<button
-						type="button"
-						className="mobile-menu-toggle"
-						ref={menuButton}
-						aria-label={menuOpen ? "Close navigation" : "Open navigation"}
-						aria-expanded={menuOpen}
-						aria-controls={menuId}
-						onClick={() => setMenuOpen((open) => !open)}
-					>
-						{menuOpen ? <X size={24} /> : <Menu size={24} />}
-					</button>
-					<span className="page-name">
-						{space.type === "shared" ? "Our household" : "Personal"}{" "}
-						<span className="slash">/</span> <strong>{pageName}</strong>
-					</span>
-					<div>
-						{alerts.button}
-						{view !== "projections" && view !== "profile" && (
-							<label className="month-picker">
-								<span className="sr-only">Reporting month</span>
-								<input
-									type="month"
-									min="0001-01"
-									max="9999-12"
-									value={month}
-									onChange={(e) => {
-										if (/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value))
-											setMonth(e.target.value);
-									}}
-								/>
-							</label>
-						)}
-						<span className="avatar">
-							{home.profile?.name.slice(0, 2).toUpperCase()}
+				</aside>
+				<main className="main-content">
+					<header className="topbar">
+						<button
+							type="button"
+							className="mobile-menu-toggle"
+							ref={menuButton}
+							aria-label={menuOpen ? "Close navigation" : "Open navigation"}
+							aria-expanded={menuOpen}
+							aria-controls={menuId}
+							onClick={() => setMenuOpen((open) => !open)}
+						>
+							{menuOpen ? <X size={24} /> : <Menu size={24} />}
+						</button>
+						<span className="page-name">
+							{space.type === "shared" ? "Our household" : "Personal"}{" "}
+							<span className="slash">/</span> <strong>{pageName}</strong>
 						</span>
-					</div>
-				</header>
-				{error && (
-					<ErrorBanner message={error} onDismiss={() => setError("")} />
-				)}
-				{notice.text && notice.context === noticeContext && (
-					<div className="save-notice" aria-live="polite">
-						{notice.text}
-					</div>
-				)}
-				<div aria-busy={busy} onChangeCapture={() => setNotice("")}>
-					{view === "projections" ? (
-						<ProjectionsView
-							key={space._id}
-							spaceId={space._id}
-							active={space.active}
-							run={run}
-							onOpenPlan={(month) => {
-								setMonth(month);
-								setView("budget");
-							}}
-							onOpenAccounts={() => setView("accounts")}
-						/>
-					) : !data ? (
-						<p aria-live="polite">Loading this month…</p>
-					) : view === "overview" ? (
-						<OverviewView
-							key={space._id}
-							run={run}
-							spaceId={space._id}
-							month={month}
-							active={space.active}
-							data={data}
-							onOpenPlan={() => setView("budget")}
-							onOpenTransactions={() => setView("transactions")}
-						/>
-					) : view === "transactions" ? (
-						<TransactionsView
-							key={space._id}
-							{...props}
-							categories={data.categories}
-							onOpenAccounts={() => setView("accounts")}
-						/>
-					) : view === "budget" ? (
-						<>
-							{alerts.budgetNotices}
-							<PlanView
+						<div>
+							{alerts.button}
+							{view !== "projections" && view !== "profile" && (
+								<label className="month-picker">
+									<span className="sr-only">Reporting month</span>
+									<input
+										type="month"
+										min="0001-01"
+										max="9999-12"
+										value={month}
+										onChange={(e) => {
+											if (/^\d{4}-(0[1-9]|1[0-2])$/.test(e.target.value))
+												setMonth(e.target.value);
+										}}
+									/>
+								</label>
+							)}
+							<span className="avatar">
+								{home.profile?.name.slice(0, 2).toUpperCase()}
+							</span>
+						</div>
+					</header>
+					{error && (
+						<ErrorBanner message={error} onDismiss={() => setError("")} />
+					)}
+					{notice.text && notice.context === noticeContext && (
+						<div className="save-notice" aria-live="polite">
+							{notice.text}
+						</div>
+					)}
+					<div aria-busy={busy} onChangeCapture={() => setNotice("")}>
+						{view === "projections" ? (
+							<ProjectionsView
+								key={space._id}
+								spaceId={space._id}
+								active={space.active}
+								run={run}
+								onOpenPlan={(month) => {
+									setMonth(month);
+									setView("budget");
+								}}
+								onOpenAccounts={() => setView("accounts")}
+							/>
+						) : !data ? (
+							<p aria-live="polite">Loading this month…</p>
+						) : view === "overview" ? (
+							<OverviewView
+								key={space._id}
+								run={run}
+								spaceId={space._id}
+								month={month}
+								active={space.active}
+								data={data}
+								onOpenPlan={() => setView("budget")}
+								onOpenTransactions={() => setView("transactions")}
+							/>
+						) : view === "transactions" ? (
+							<TransactionsView
+								key={space._id}
+								{...props}
+								categories={data.categories}
+								onOpenAccounts={() => setView("accounts")}
+							/>
+						) : view === "budget" ? (
+							<>
+								{alerts.budgetNotices}
+								<PlanView
+									key={`${space._id}:${month}`}
+									{...props}
+									data={data}
+									shared={space.type === "shared"}
+								/>
+							</>
+						) : view === "funds" ? (
+							<FundsView
 								key={`${space._id}:${month}`}
 								{...props}
-								data={data}
-								shared={space.type === "shared"}
+								data={data.fundPlan}
 							/>
-						</>
-					) : view === "funds" ? (
-						<FundsView
-							key={`${space._id}:${month}`}
-							{...props}
-							data={data.fundPlan}
-						/>
-					) : view === "profile" ? (
-						<ProfileView
-							profile={home.profile!}
-							email={home.user.email}
-							run={run}
-						/>
-					) : (
-						<AccountsView
-							key={space._id}
-							{...props}
-							home={home}
-							fundedByShared={Boolean(data.fundedBy)}
-						/>
-					)}
-				</div>
-			</main>
-			{alerts.dialog}
-		</div>
+						) : view === "profile" ? (
+							<ProfileView
+								profile={home.profile!}
+								email={home.user.email}
+								run={run}
+							/>
+						) : (
+							<AccountsView
+								key={space._id}
+								{...props}
+								home={home}
+								fundedByShared={Boolean(data.fundedBy)}
+							/>
+						)}
+					</div>
+				</main>
+				{alerts.dialog}
+			</div>
+		</ActionErrorContext.Provider>
 	);
 }

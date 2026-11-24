@@ -1,5 +1,5 @@
 import { useMutation } from "convex/react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
 import { api } from "../../convex/_generated/api";
 import { nextMonth } from "../domain/budget";
 import {
@@ -29,6 +29,8 @@ export function PlanView({
 	const [draft, setDraft] = useState(() =>
 		createPlanDraft(data.plan, data.categories),
 	);
+	// An untouched editor follows partner saves; edited values wait for Load current plan.
+	const [edited, setEdited] = useState(false);
 	const [saving, setSaving] = useState(false);
 	const [savedNotice, setSavedNotice] = useState("");
 	// A cached response or an older server may not include the funding list yet.
@@ -57,6 +59,20 @@ export function PlanView({
 		revision: data.plan?.revision ?? 0,
 		fundAmount: data.fundPlan.total,
 	});
+	const stale = result.stale || fundingStale;
+	function loadCurrentPlan() {
+		setDraft(createPlanDraft(data.plan, data.categories));
+		setFundingSnapshot(data.personalFunding);
+		setFundingAmounts({});
+		setEdited(false);
+	}
+	useEffect(() => {
+		if (stale && !edited && !saving) {
+			setDraft(createPlanDraft(data.plan, data.categories));
+			setFundingSnapshot(data.personalFunding);
+			setFundingAmounts({});
+		}
+	}, [stale, edited, saving, data.plan, data.categories, data.personalFunding]);
 	async function submit(e: FormEvent<HTMLFormElement>) {
 		e.preventDefault();
 		const plan = result.plan;
@@ -111,6 +127,7 @@ export function PlanView({
 							}),
 				);
 				setFundingAmounts({});
+				setEdited(false);
 			}
 		} finally {
 			setSaving(false);
@@ -118,25 +135,20 @@ export function PlanView({
 	}
 	return (
 		<>
-			{(result.stale || fundingStale) && (
+			{stale && edited && (
 				<div className="banner" role="alert">
 					This plan changed. Your unsaved entries are still here.{" "}
-					<button
-						type="button"
-						className="secondary"
-						onClick={() => {
-							setDraft(createPlanDraft(data.plan, data.categories));
-							setFundingSnapshot(data.personalFunding);
-							setFundingAmounts({});
-						}}
-					>
+					<button type="button" className="secondary" onClick={loadCurrentPlan}>
 						Load current plan
 					</button>
 				</div>
 			)}
 			<form
 				onSubmit={submit}
-				onChange={() => setSavedNotice("")}
+				onChange={() => {
+					setSavedNotice("");
+					setEdited(true);
+				}}
 				className="plan-grid"
 			>
 				<section className="panel">

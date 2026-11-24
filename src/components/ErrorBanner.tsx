@@ -1,4 +1,17 @@
 import { X } from "lucide-react";
+import { createContext, useContext } from "react";
+
+/** The latest failed action, so an open dialog can show it above its backdrop. */
+export const ActionErrorContext = createContext<{
+	message: string;
+	dismiss: () => void;
+}>({ message: "", dismiss: () => {} });
+
+/** Shows the latest failed action inside a dialog, where the page banner is hidden. */
+export function ActionErrorBanner() {
+	const { message, dismiss } = useContext(ActionErrorContext);
+	return message ? <ErrorBanner message={message} onDismiss={dismiss} /> : null;
+}
 
 export function ErrorBanner({
 	message,

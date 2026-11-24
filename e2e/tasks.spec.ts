@@ -702,13 +702,16 @@ test("two members keep unsaved plan edits until they load the current revision",
 		.getByLabel("Monthly savings target", { exact: true })
 		.fill("300.00");
 	await saveBudget(bob);
-	await expect(
-		alice.getByRole("button", { name: "Load current plan" }),
-	).toBeVisible();
-	await alice.getByRole("button", { name: "Load current plan" }).click();
+	// Alice has no unsaved entries, so her open editor follows Bob's save.
 	await expect(alice.getByLabel("Groceries", { exact: true })).toHaveValue(
 		"700.00",
 	);
+	await expect(
+		alice.getByRole("button", { name: "Load current plan" }),
+	).toHaveCount(0);
+	await expect(
+		alice.getByRole("button", { name: "Save budget", exact: true }),
+	).toBeEnabled();
 	await openMonthly(bob);
 	await expect(
 		bob.getByLabel("Monthly savings target", { exact: true }),
@@ -744,14 +747,13 @@ test("two members must load changed personal funding before saving their own amo
 	).toHaveValue("125.50");
 	await saveAmount(bob, "150.00");
 	await expect(
-		alice.getByRole("button", { name: "Load current plan" }),
-	).toBeVisible();
-	await alice.getByRole("button", { name: "Load current plan" }).click();
-	await expect(
 		allocationForm(alice).getByLabel("Alice's personal amount", {
 			exact: true,
 		}),
 	).toHaveValue("150.00");
+	await expect(
+		alice.getByRole("button", { name: "Load current plan" }),
+	).toHaveCount(0);
 	await openMonthly(bob);
 	await expect(
 		allocationForm(bob).getByLabel("Alice's personal amount", { exact: true }),
@@ -820,4 +822,89 @@ test("a delayed save cannot overwrite a newer plan and can recover in the editor
 	await expect(alice.getByLabel("Groceries", { exact: true })).toHaveValue(
 		"800.00",
 	);
+});
+
+test("an untouched plan shows a partner's saved changes without loading", async ({
+	household: { alice, bob },
+}) => {
+	await openMonthly(alice);
+	await openMonthly(bob);
+	await alice
+		.getByLabel("Expected take-home income", { exact: true })
+		.fill("1000.00");
+	await alice.getByLabel("Groceries", { exact: true }).fill("1000.00");
+	await saveBudget(alice);
+	await expect(bob.getByLabel("Groceries", { exact: true })).toHaveValue(
+		"1000.00",
+	);
+	await expect(
+		bob.getByLabel("Expected take-home income", { exact: true }),
+	).toHaveValue("1000.00");
+	await expect(
+		bob.getByRole("alert").filter({ hasText: "This plan changed" }),
+	).toHaveCount(0);
+	await expect(
+		bob.getByRole("button", { name: "Save budget", exact: true }),
+	).toBeEnabled();
+});
+
+test("a rejected transaction save shows its error inside the open editor", async ({
+	household: { alice, bob },
+}) => {
+	await openMonthly(alice);
+	await alice
+		.getByRole("button", { name: "Transactions", exact: true })
+		.click();
+	await alice
+		.getByRole("button", { name: "Add transaction", exact: true })
+		.click();
+	const added = alice.getByRole("dialog", { name: "Add a transaction" });
+	await added.getByLabel("Description", { exact: true }).fill("Market");
+	await added
+		.getByLabel(
+			"Amount (positive for outflow; negative for income or refund)",
+			{ exact: true },
+		)
+		.fill("40");
+	await added
+		.getByRole("button", { name: "Save transaction", exact: true })
+		.click();
+	await expect(added).toHaveCount(0);
+	await openMonthly(bob);
+	await bob.getByRole("button", { name: "Transactions", exact: true }).click();
+	const editors = await Promise.all(
+		[alice, bob].map(async (page) => {
+			await page
+				.getByRole("button", { name: /Market/ })
+				.first()
+				.click();
+			const dialog = page.getByRole("dialog");
+			await dialog
+				.getByLabel("Note", { exact: true })
+				.fill(`${page === alice ? "Alice" : "Bob"} note`);
+			return dialog;
+		}),
+	);
+	await editors[0]
+		.getByRole("button", { name: "Save transaction", exact: true })
+		.click();
+	await expect(editors[0]).toHaveCount(0);
+	await editors[1]
+		.getByRole("button", { name: "Save transaction", exact: true })
+		.click();
+	const error = editors[1]
+		.getByRole("alert")
+		.filter({ hasText: "This changed while you were editing" });
+	await expect(error).toBeVisible();
+	await expect(editors[1].getByLabel("Note", { exact: true })).toHaveValue(
+		"Bob note",
+	);
+	await error
+		.getByRole("button", { name: "Dismiss error notification" })
+		.click();
+	await expect(
+		bob
+			.getByRole("alert")
+			.filter({ hasText: "This changed while you were editing" }),
+	).toHaveCount(0);
 });
