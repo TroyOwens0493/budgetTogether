@@ -895,16 +895,27 @@ test("a rejected transaction save shows its error inside the open editor", async
 	const error = editors[1]
 		.getByRole("alert")
 		.filter({ hasText: "This changed while you were editing" });
-	await expect(error).toBeVisible();
+	await expect(error).toBeInViewport();
 	await expect(editors[1].getByLabel("Note", { exact: true })).toHaveValue(
 		"Bob note",
 	);
-	await error
-		.getByRole("button", { name: "Dismiss error notification" })
+	// The error stays on the page after closing, and a new dialog starts clean.
+	await editors[1]
+		.getByRole("button", { name: "Close dialog", exact: true })
+		.click();
+	const pageError = bob
+		.getByRole("alert")
+		.filter({ hasText: "This changed while you were editing" });
+	await expect(pageError).toBeVisible();
+	await bob
+		.getByRole("button", { name: "Add transaction", exact: true })
 		.click();
 	await expect(
-		bob
-			.getByRole("alert")
-			.filter({ hasText: "This changed while you were editing" }),
+		bob.getByRole("dialog", { name: "Add a transaction" }).getByRole("alert"),
 	).toHaveCount(0);
+	await bob.getByRole("button", { name: "Close dialog", exact: true }).click();
+	await pageError
+		.getByRole("button", { name: "Dismiss error notification" })
+		.click();
+	await expect(pageError).toHaveCount(0);
 });
